@@ -36,6 +36,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/sales', [SalesController::class, 'index'])->name('sales');
     Route::get('/companies/{company}/customers', [SalesController::class, 'customers'])->name('sales.customers');
     Route::post('/companies/{company}/customers', [SalesController::class, 'storeCustomer'])->name('sales.customers.store');
+    Route::get('/companies/{company}/customers/{customer}/edit', [SalesController::class, 'editCustomer'])->name('sales.customers.edit');
+    Route::put('/companies/{company}/customers/{customer}', [SalesController::class, 'updateCustomer'])->name('sales.customers.update');
+    Route::patch('/companies/{company}/customers/{customer}/status', [SalesController::class, 'customerStatus'])->name('sales.customers.status');
+    Route::get('/companies/{company}/customers/{customer}/delete', [SalesController::class, 'confirmCustomerDelete'])->name('sales.customers.delete');
+    Route::delete('/companies/{company}/customers/{customer}', [SalesController::class, 'destroyCustomer'])->name('sales.customers.destroy');
     Route::get('/companies/{company}/items', [SalesController::class, 'items'])->name('sales.items');
     Route::post('/companies/{company}/items', [SalesController::class, 'storeItem'])->name('sales.items.store');
     Route::get('/companies/{company}/sales-invoices', [SalesController::class, 'invoices'])->name('sales.invoices');

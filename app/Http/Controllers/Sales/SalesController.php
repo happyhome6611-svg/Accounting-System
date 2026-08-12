@@ -11,8 +11,11 @@ use App\Models\SalesCreditNote;
 use App\Models\SalesInvoice;
 use App\Models\SalesOrder;
 use App\Models\SalesQuotation;
+use App\Services\CustomerMaintenanceService;
+use App\Services\MoneyFormatter;
 use App\Services\SalesService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class SalesController extends Controller
 {
@@ -26,11 +29,65 @@ class SalesController extends Controller
         return view('sales.index', ['companies' => $r->user()->companies()->get()]);
     }
 
-    public function customers(Request $r, Company $company)
+    public function customers(Request $r, Company $company, CustomerMaintenanceService $maintenance, MoneyFormatter $money)
+    {
+        $company = $this->company($r, $company)->load('baseCurrency');
+        $customers = Customer::where('company_id', $company->id)->orderBy('code')->get();
+        $deletable = $customers->mapWithKeys(fn ($customer) => [$customer->id => $maintenance->isDeletable($customer)]);
+
+        return view('sales.customers', compact('company', 'customers', 'deletable', 'money'));
+    }
+
+    public function editCustomer(Request $r, Company $company, Customer $customer, CustomerMaintenanceService $maintenance, MoneyFormatter $money)
+    {
+        $company = $this->company($r, $company)->load('baseCurrency');
+        abort_unless($customer->company_id === $company->id, 404);
+
+        return view('sales.customer-edit', compact('company', 'customer', 'money') + ['deletable' => $maintenance->isDeletable($customer), 'blockers' => $maintenance->blockers($customer)]);
+    }
+
+    public function updateCustomer(Request $r, Company $company, Customer $customer, CustomerMaintenanceService $service)
     {
         $company = $this->company($r, $company);
+        abort_unless($customer->company_id === $company->id, 404);
+        $data = $r->validate($this->customerRules($company, $customer));
+        $service->update($company, $customer, $data, $r->user());
 
-        return view('sales.customers', compact('company') + ['customers' => Customer::where('company_id', $company->id)->orderBy('code')->get()]);
+        return redirect()->route('sales.customers', $company)->with('success', 'Customer updated.');
+    }
+
+    public function customerStatus(Request $r, Company $company, Customer $customer, CustomerMaintenanceService $service)
+    {
+        $company = $this->company($r, $company);
+        abort_unless($customer->company_id === $company->id, 404);
+        $data = $r->validate(['is_active' => ['required', 'boolean']]);
+        $service->setActive($company, $customer, (bool) $data['is_active'], $r->user());
+
+        return back()->with('success', $data['is_active'] ? 'Customer reactivated.' : 'Customer deactivated.');
+    }
+
+    public function confirmCustomerDelete(Request $r, Company $company, Customer $customer, CustomerMaintenanceService $service)
+    {
+        $company = $this->company($r, $company);
+        abort_unless($customer->company_id === $company->id, 404);
+        $blockers = $service->blockers($customer);
+
+        return view('sales.customer-delete', compact('company', 'customer', 'blockers'));
+    }
+
+    public function destroyCustomer(Request $r, Company $company, Customer $customer, CustomerMaintenanceService $service)
+    {
+        $company = $this->company($r, $company);
+        abort_unless($customer->company_id === $company->id, 404);
+        $data = $r->validate(['confirmation_name' => ['required', 'string']]);
+        $service->delete($company, $customer, $r->user(), $data['confirmation_name']);
+
+        return redirect()->route('sales.customers', $company)->with('success', 'Unused customer permanently deleted.');
+    }
+
+    private function customerRules(Company $company, Customer $customer): array
+    {
+        return ['code' => ['required', 'string', 'max:40', Rule::unique('customers')->where('company_id', $company->id)->ignore($customer->id)], 'name' => ['required', 'string', 'max:255'], 'legal_name' => ['nullable', 'string', 'max:255'], 'type' => ['required', Rule::in(['business', 'individual'])], 'email' => ['nullable', 'email'], 'phone' => ['nullable', 'string', 'max:40'], 'billing_address' => ['nullable', 'string'], 'shipping_address' => ['nullable', 'string'], 'country_id' => ['nullable', 'exists:countries,id'], 'currency_id' => ['required', 'exists:currencies,id'], 'tax_identifiers' => ['nullable', 'array'], 'payment_terms_days' => ['required', 'integer', 'min:0'], 'credit_limit' => ['required', 'numeric', 'min:0'], 'receivable_account_id' => ['required', 'integer']];
     }
 
     public function storeCustomer(Request $r, Company $company, SalesService $s)

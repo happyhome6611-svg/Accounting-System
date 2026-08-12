@@ -48,7 +48,10 @@ final class SalesService
     private function document(Company $c, array $data, User $u, string $model, string $type, string $prefix, string $number): object
     {
         $this->access($c, $u);
-        $this->customer($c, $data['customer_id']);
+        $customer = $this->customer($c, $data['customer_id']);
+        if (! $customer->is_active) {
+            throw ValidationException::withMessages(['customer' => 'Inactive customers cannot be selected for new sales transactions.']);
+        }
 
         return DB::transaction(function () use ($c, $data, $u, $model, $type, $prefix, $number) {
             $lines = $data['lines'];
