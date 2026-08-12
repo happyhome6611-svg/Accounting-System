@@ -1,8 +1,8 @@
-# Arua Accounting System v0.2
+# Arua Accounting System v0.3
 
 Arua is a Laravel 12 and PostgreSQL multi-company accounting platform. It uses one shared accounting engine and independently resolved country modules for India, New Zealand, Australia, the United Kingdom, and Singapore.
 
-Version 0.2 adds an exact-decimal double-entry journal engine, immutable posting, reversing journals, period controls, audit events, General Ledger, Trial Balance, Profit & Loss, and Balance Sheet reports. Posted journal lines remain the accounting source of truth; no duplicate balance table is maintained.
+Version 0.3 adds company-isolated customer and product/service masters, quotations, sales orders, sales invoices, credit notes, customer receipts and allocations, Accounts Receivable, customer statements, and AR aging. Posted sales documents use the v0.2 journal engine; quotations and orders do not affect accounting.
 
 ## Local setup
 

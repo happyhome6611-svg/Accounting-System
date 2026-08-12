@@ -5,6 +5,8 @@ use App\Http\Controllers\Accounting\ReportController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Company\CompanyController;
+use App\Http\Controllers\Sales\ReceivablesController;
+use App\Http\Controllers\Sales\SalesController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
@@ -29,7 +31,18 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/trial-balance', [ReportController::class, 'trial'])->name('reports.trial');
     Route::get('/reports/profit-loss', [ReportController::class, 'profitLoss'])->name('reports.profit-loss');
     Route::get('/reports/balance-sheet', [ReportController::class, 'balanceSheet'])->name('reports.balance-sheet');
-    foreach (['sales', 'purchases', 'banking', 'tax', 'settings'] as $module) {
+    Route::get('/sales', [SalesController::class, 'index'])->name('sales');
+    Route::get('/companies/{company}/customers', [SalesController::class, 'customers'])->name('sales.customers');
+    Route::post('/companies/{company}/customers', [SalesController::class, 'storeCustomer'])->name('sales.customers.store');
+    Route::get('/companies/{company}/items', [SalesController::class, 'items'])->name('sales.items');
+    Route::post('/companies/{company}/items', [SalesController::class, 'storeItem'])->name('sales.items.store');
+    Route::get('/companies/{company}/sales-invoices', [SalesController::class, 'invoices'])->name('sales.invoices');
+    Route::get('/companies/{company}/sales/{type}', [SalesController::class, 'documents'])->name('sales.documents');
+    Route::post('/companies/{company}/sales-invoices/{invoice}/post', [SalesController::class, 'postInvoice'])->name('sales.invoices.post');
+    Route::get('/reports/accounts-receivable', [ReceivablesController::class, 'ar'])->name('reports.ar');
+    Route::get('/reports/ar-aging', [ReceivablesController::class, 'aging'])->name('reports.ar-aging');
+    Route::get('/reports/customer-statement', [ReceivablesController::class, 'statement'])->name('reports.customer-statement');
+    foreach (['purchases', 'banking', 'tax', 'settings'] as $module) {
         Route::view("/{$module}", 'coming-soon.index', ['module' => ucfirst($module)])->name($module);
     }
 });

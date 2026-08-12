@@ -45,4 +45,14 @@ class Company extends Model
     {
         return $this->hasMany(JournalEntry::class);
     }
+
+    public function customers()
+    {
+        return $this->hasMany(Customer::class);
+    }
+
+    public function items()
+    {
+        return $this->hasMany(Item::class);
+    }
 }
