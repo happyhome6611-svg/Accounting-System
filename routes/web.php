@@ -20,6 +20,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', fn () => view('dashboard.index', ['companies' => auth()->user()->companies()->count()]))->name('dashboard');
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
     Route::resource('companies', CompanyController::class)->only(['index', 'create', 'store', 'show']);
+    Route::get('/companies/{company}/delete', [CompanyController::class, 'confirmDelete'])->name('companies.delete');
+    Route::delete('/companies/{company}', [CompanyController::class, 'destroy'])->name('companies.destroy');
     Route::get('/accounting', [JournalController::class, 'index'])->name('accounting');
     Route::get('/companies/{company}/journals/create', [JournalController::class, 'create'])->name('journals.create');
     Route::post('/companies/{company}/journals', [JournalController::class, 'store'])->name('journals.store');
