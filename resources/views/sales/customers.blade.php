@@ -6,7 +6,7 @@
 <div class="col-md-4"><label class="form-label">Customer Code</label><input class="form-control" name="code" placeholder="Generated if blank"></div>
 <div class="col-md-8"><label class="form-label">Customer Name</label><input class="form-control" name="name" required></div>
 <div class="col-md-6"><label class="form-label">Email</label><input type="email" class="form-control" name="email"></div>
-<div class="col-md-6"><label class="form-label">Receivable Account</label><select class="form-select" name="receivable_account_id">@foreach($company->accounts()->where('type','asset')->get() as $a)<option value="{{ $a->id }}">{{ $a->code }} — {{ $a->name }}</option>@endforeach</select></div>
+<div class="col-md-6"><label class="form-label">Receivable Account</label><select class="form-select" name="receivable_account_id">@foreach($company->accounts()->where('type','asset')->get() as $a)<option value="{{ $a->id }}" @selected($a->code==='1100')>{{ $a->code }} — {{ $a->name }}</option>@endforeach</select></div>
 <div class="col-md-4"><label class="form-label">Payment Terms (Days)</label><input type="number" min="0" name="payment_terms_days" value="30" class="form-control" required></div>
 <div class="col-md-4"><label class="form-label">Credit Limit ({{ $money->label($company->baseCurrency) }})</label><div class="input-group"><span class="input-group-text">{{ $money->symbol($company->baseCurrency) }}</span><input type="number" min="0" name="credit_limit" value="0.00" step="0.01" class="form-control" required></div></div>
 <input type="hidden" name="currency_id" value="{{ $company->base_currency_id }}"><div class="col-md-4 d-flex align-items-end"><button class="btn btn-primary w-100">Add Customer</button></div></form></div>

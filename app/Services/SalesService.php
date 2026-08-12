@@ -20,6 +20,7 @@ final class SalesService
     public function createCustomer(Company $company, array $data, User $user): Customer
     {
         $this->access($company, $user);
+        $this->active($company);
         $this->account($company, $data['receivable_account_id']);
         $customer = $company->customers()->create([...$data, 'code' => $data['code'] ?? $this->numbers->next($company, 'customer', 'CUS'), 'created_by' => $user->id, 'updated_by' => $user->id]);
         $this->audit->log('customer.created', $customer, $company->id, $user->id, null, $customer->toArray());
@@ -30,6 +31,7 @@ final class SalesService
     public function createItem(Company $company, array $data, User $user)
     {
         $this->access($company, $user);
+        $this->active($company);
         $this->account($company, $data['revenue_account_id']);
 
         return $company->items()->create([...$data, 'created_by' => $user->id, 'updated_by' => $user->id]);
@@ -48,6 +50,7 @@ final class SalesService
     private function document(Company $c, array $data, User $u, string $model, string $type, string $prefix, string $number): object
     {
         $this->access($c, $u);
+        $this->active($c);
         $customer = $this->customer($c, $data['customer_id']);
         if (! $customer->is_active) {
             throw ValidationException::withMessages(['customer' => 'Inactive customers cannot be selected for new sales transactions.']);
@@ -59,6 +62,9 @@ final class SalesService
             $total = $this->total($lines);
             $doc = $model::create([...$data, 'company_id' => $c->id, $number => $this->numbers->next($c, $type, $prefix), 'subtotal' => $total, 'total' => $total, 'created_by' => $u->id, 'updated_by' => $u->id]);
             foreach ($lines as $line) {
+                if (! empty($line['item_id']) && ! $c->items()->whereKey($line['item_id'])->where('is_active', true)->exists()) {
+                    throw ValidationException::withMessages(['item' => 'Inactive or cross-company items cannot be selected.']);
+                }
                 $doc->lines()->create([...$line, 'line_amount' => $this->lineAmount($line)]);
             }
             $this->audit->log($type.'.created', $doc, $c->id, $u->id);
@@ -70,6 +76,7 @@ final class SalesService
     public function createInvoice(Company $c, array $data, User $u): SalesInvoice
     {
         $this->access($c, $u);
+        $this->active($c);
         $customer = $this->customer($c, $data['customer_id']);
         if (! $customer->is_active) {
             throw ValidationException::withMessages(['customer' => 'Inactive customers cannot be invoiced.']);
@@ -81,6 +88,9 @@ final class SalesService
             $total = $this->total($lines);
             $invoice = SalesInvoice::create([...$data, 'company_id' => $c->id, 'currency_id' => $data['currency_id'] ?? $customer->currency_id, 'invoice_number' => $this->numbers->next($c, 'sales_invoice', 'INV'), 'subtotal' => $total, 'tax_amount' => 0, 'total' => $total, 'amount_paid' => 0, 'status' => 'draft', 'created_by' => $u->id, 'updated_by' => $u->id]);
             foreach ($lines as $line) {
+                if (! empty($line['item_id']) && ! $c->items()->whereKey($line['item_id'])->where('is_active', true)->exists()) {
+                    throw ValidationException::withMessages(['item' => 'Inactive or cross-company items cannot be selected.']);
+                }
                 $this->account($c, $line['revenue_account_id']);
                 $invoice->lines()->create([...$line, 'tax_amount' => 0, 'line_amount' => $this->lineAmount($line)]);
             }
@@ -192,6 +202,13 @@ final class SalesService
     private function account(Company $c, int $id)
     {
         return $c->accounts()->findOrFail($id);
+    }
+
+    private function active(Company $company): void
+    {
+        if ($company->is_active === false) {
+            throw ValidationException::withMessages(['company' => 'Inactive companies cannot accept new sales transactions.']);
+        }
     }
 
     private function write(callable $callback): void

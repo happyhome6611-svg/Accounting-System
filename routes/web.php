@@ -19,7 +19,8 @@ Route::middleware('guest')->group(function () {
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', fn () => view('dashboard.index', ['companies' => auth()->user()->companies()->count()]))->name('dashboard');
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
-    Route::resource('companies', CompanyController::class)->only(['index', 'create', 'store', 'show']);
+    Route::resource('companies', CompanyController::class)->only(['index', 'create', 'store', 'show', 'edit', 'update']);
+    Route::patch('/companies/{company}/status', [CompanyController::class, 'status'])->name('companies.status');
     Route::get('/companies/{company}/delete', [CompanyController::class, 'confirmDelete'])->name('companies.delete');
     Route::delete('/companies/{company}', [CompanyController::class, 'destroy'])->name('companies.destroy');
     Route::get('/accounting', [JournalController::class, 'index'])->name('accounting');
@@ -43,6 +44,11 @@ Route::middleware('auth')->group(function () {
     Route::delete('/companies/{company}/customers/{customer}', [SalesController::class, 'destroyCustomer'])->name('sales.customers.destroy');
     Route::get('/companies/{company}/items', [SalesController::class, 'items'])->name('sales.items');
     Route::post('/companies/{company}/items', [SalesController::class, 'storeItem'])->name('sales.items.store');
+    Route::get('/companies/{company}/items/{item}/edit', [SalesController::class, 'editItem'])->name('sales.items.edit');
+    Route::put('/companies/{company}/items/{item}', [SalesController::class, 'updateItem'])->name('sales.items.update');
+    Route::patch('/companies/{company}/items/{item}/status', [SalesController::class, 'itemStatus'])->name('sales.items.status');
+    Route::get('/companies/{company}/items/{item}/delete', [SalesController::class, 'confirmItemDelete'])->name('sales.items.delete');
+    Route::delete('/companies/{company}/items/{item}', [SalesController::class, 'destroyItem'])->name('sales.items.destroy');
     Route::get('/companies/{company}/sales-invoices', [SalesController::class, 'invoices'])->name('sales.invoices');
     Route::get('/companies/{company}/sales/{type}', [SalesController::class, 'documents'])->name('sales.documents');
     Route::post('/companies/{company}/sales-invoices/{invoice}/post', [SalesController::class, 'postInvoice'])->name('sales.invoices.post');

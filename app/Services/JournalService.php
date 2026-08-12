@@ -15,6 +15,9 @@ final class JournalService
     public function create(Company $company, array $data, User $user): JournalEntry
     {
         $this->assertAccessible($company->id, $user);
+        if ($company->is_active === false) {
+            throw ValidationException::withMessages(['company' => 'Inactive companies cannot accept new accounting transactions.']);
+        }
 
         return DB::transaction(function () use ($company, $data, $user) {
             $period = $company->financialYears()->with('periods')->findOrFail($data['financial_year_id'])->periods->firstWhere('id', (int) $data['accounting_period_id']);

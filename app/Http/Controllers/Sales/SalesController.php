@@ -12,6 +12,7 @@ use App\Models\SalesInvoice;
 use App\Models\SalesOrder;
 use App\Models\SalesQuotation;
 use App\Services\CustomerMaintenanceService;
+use App\Services\ItemMaintenanceService;
 use App\Services\MoneyFormatter;
 use App\Services\SalesService;
 use Illuminate\Http\Request;
@@ -101,9 +102,63 @@ class SalesController extends Controller
 
     public function items(Request $r, Company $company)
     {
-        $company = $this->company($r, $company);
+        $company = $this->company($r, $company)->load('baseCurrency');
+        $items = Item::where('company_id', $company->id)->orderBy('code')->get();
+        $maintenance = app(ItemMaintenanceService::class);
+        $deletable = $items->mapWithKeys(fn ($item) => [$item->id => $maintenance->isDeletable($item)]);
 
-        return view('sales.items', compact('company') + ['items' => Item::where('company_id', $company->id)->orderBy('code')->get()]);
+        return view('sales.items', compact('company', 'items', 'deletable') + ['money' => app(MoneyFormatter::class)]);
+    }
+
+    public function editItem(Request $r, Company $company, Item $item, ItemMaintenanceService $service)
+    {
+        $company = $this->company($r, $company)->load('baseCurrency');
+        abort_unless($item->company_id === $company->id, 404);
+
+        return view('sales.item-edit', compact('company', 'item') + ['money' => app(MoneyFormatter::class), 'deletable' => $service->isDeletable($item)]);
+    }
+
+    public function updateItem(Request $r, Company $company, Item $item, ItemMaintenanceService $service)
+    {
+        $company = $this->company($r, $company);
+        abort_unless($item->company_id === $company->id, 404);
+        $data = $r->validate($this->itemRules($company, $item));
+        $service->update($company, $item, $data, $r->user());
+
+        return redirect()->route('sales.items', $company)->with('success', 'Item updated.');
+    }
+
+    public function itemStatus(Request $r, Company $company, Item $item, ItemMaintenanceService $service)
+    {
+        $company = $this->company($r, $company);
+        abort_unless($item->company_id === $company->id, 404);
+        $data = $r->validate(['is_active' => 'required|boolean']);
+        $service->setActive($company, $item, (bool) $data['is_active'], $r->user());
+
+        return back();
+    }
+
+    public function confirmItemDelete(Request $r, Company $company, Item $item, ItemMaintenanceService $service)
+    {
+        $company = $this->company($r, $company);
+        abort_unless($item->company_id === $company->id, 404);
+
+        return view('sales.item-delete', compact('company', 'item') + ['blockers' => $service->blockers($item)]);
+    }
+
+    public function destroyItem(Request $r, Company $company, Item $item, ItemMaintenanceService $service)
+    {
+        $company = $this->company($r, $company);
+        abort_unless($item->company_id === $company->id, 404);
+        $data = $r->validate(['confirmation_name' => 'required|string']);
+        $service->delete($company, $item, $r->user(), $data['confirmation_name']);
+
+        return redirect()->route('sales.items', $company);
+    }
+
+    private function itemRules(Company $company, Item $item): array
+    {
+        return ['code' => ['required', 'string', 'max:40', Rule::unique('items')->where('company_id', $company->id)->ignore($item->id)], 'name' => 'required|string|max:255', 'description' => 'nullable|string', 'type' => ['required', Rule::in(['product', 'service'])], 'unit' => 'required|string|max:20', 'sales_price' => 'required|numeric|min:0', 'revenue_account_id' => 'required|integer', 'tax_category' => 'nullable|string'];
     }
 
     public function storeItem(Request $r, Company $company, SalesService $s)
