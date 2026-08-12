@@ -1,0 +1,1 @@
+@extends('layouts.app') @section('content')<h1>Dashboard</h1><p class="text-muted">Your accounting workspace</p><div class="card p-4"><h5>Companies</h5><div class="display-5">{{ $companies }}</div><a class="btn btn-primary align-self-start mt-3" href="{{ route('companies.create') }}">Create company</a></div>@endsection
