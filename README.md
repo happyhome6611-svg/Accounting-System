@@ -1,6 +1,8 @@
-# Accounting Pro v0.1
+# Arua Accounting System v0.2
 
-Accounting Pro is a Laravel 12 and PostgreSQL multi-company accounting foundation. It uses one shared accounting engine and independently resolved country modules for India, New Zealand, Australia, the United Kingdom, and Singapore.
+Arua is a Laravel 12 and PostgreSQL multi-company accounting platform. It uses one shared accounting engine and independently resolved country modules for India, New Zealand, Australia, the United Kingdom, and Singapore.
+
+Version 0.2 adds an exact-decimal double-entry journal engine, immutable posting, reversing journals, period controls, audit events, General Ledger, Trial Balance, Profit & Loss, and Balance Sheet reports. Posted journal lines remain the accounting source of truth; no duplicate balance table is maintained.
 
 ## Local setup
 
@@ -14,6 +16,6 @@ Requirements: PHP 8.2+, Composer, PostgreSQL, and Node.js (optional for future c
 
 ## Validation
 
-Run `php artisan test` and `vendor/bin/pint --test`. The automated suite covers authentication, company creation, financial periods, the chart of accounts, company isolation, idempotent master seeders, and country-provider resolution.
+Run `php artisan test`, `vendor/bin/pint --test`, and `git diff --check`. The automated suite covers the v0.1 foundation plus journal validation, posting, immutability, reversal, company isolation, and report calculations.
 
-Tax calculation, invoices, inventory, payroll, returns, and government integrations are intentionally outside v0.1.
+Tax calculation, invoices, inventory, payroll, returns, and government integrations remain intentionally outside v0.2.
