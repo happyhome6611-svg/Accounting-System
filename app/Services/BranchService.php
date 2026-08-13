@@ -46,11 +46,16 @@ final class BranchService
     public function update(Company $company, Branch $branch, array $data, User $user): Branch
     {
         $this->access($company, $user, $branch);
-        if (! empty($data['is_main_branch']) && ! $branch->is_main_branch && $company->branches()->where('is_main_branch', true)->exists()) {
-            throw ValidationException::withMessages(['is_main_branch' => 'The company already has a main branch.']);
+        if (array_key_exists('is_main_branch', $data) && ! $data['is_main_branch'] && $branch->is_main_branch) {
+            throw ValidationException::withMessages(['is_main_branch' => 'Assign another branch as main instead of removing the main designation.']);
         }
         $before = $branch->toArray();
-        $branch->update([...$data, 'updated_by' => $user->id]);
+        DB::transaction(function () use ($company, $branch, $data, $user) {
+            if (! empty($data['is_main_branch']) && ! $branch->is_main_branch) {
+                $company->branches()->where('is_main_branch', true)->update(['is_main_branch' => false, 'updated_by' => $user->id]);
+            }
+            $branch->update([...$data, 'updated_by' => $user->id]);
+        });
         $this->audit->log('branch.updated', $branch, $company->id, $user->id, $before, $branch->fresh()->toArray());
 
         return $branch;

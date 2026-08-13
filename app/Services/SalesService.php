@@ -132,11 +132,15 @@ final class SalesService
             if ($note->status !== 'draft') {
                 throw ValidationException::withMessages(['credit_note' => 'Credit note must be Draft.']);
             }
+            $branch = $this->branches->resolve($c, $note->branch_id ? (int) $note->branch_id : null);
+            if (! $note->branch_id) {
+                $note->update(['branch_id' => $branch->id]);
+            }
             $debits = [];
             foreach ($note->lines->groupBy('revenue_account_id') as $account => $lines) {
                 $debits[] = ['account_id' => $account, 'description' => $note->credit_note_number, 'debit' => $lines->sum('line_amount'), 'credit' => '0'];
             }
-            $journal = $this->journals->create($c, ['financial_year_id' => $note->accountingPeriod->financial_year_id, 'accounting_period_id' => $note->accounting_period_id, 'transaction_date' => $note->credit_note_date, 'reference' => $note->credit_note_number, 'description' => 'Credit note '.$note->credit_note_number, 'lines' => [...$debits, ['account_id' => $customer->receivable_account_id, 'description' => $note->credit_note_number, 'debit' => '0', 'credit' => $note->total]]], $u);
+            $journal = $this->journals->create($c, ['branch_id' => $branch->id, 'financial_year_id' => $note->accountingPeriod->financial_year_id, 'accounting_period_id' => $note->accounting_period_id, 'transaction_date' => $note->credit_note_date, 'reference' => $note->credit_note_number, 'description' => 'Credit note '.$note->credit_note_number, 'lines' => [...$debits, ['account_id' => $customer->receivable_account_id, 'description' => $note->credit_note_number, 'debit' => '0', 'credit' => $note->total]]], $u);
             $this->journals->post($journal, $u);
             $note->update(['status' => 'posted', 'journal_entry_id' => $journal->id, 'updated_by' => $u->id]);
             $this->audit->log('credit_note.posted', $note, $c->id, $u->id);
@@ -151,6 +155,10 @@ final class SalesService
             $receipt = CustomerReceipt::query()->lockForUpdate()->with(['allocations.invoice', 'accountingPeriod'])->findOrFail($receipt->id);
             $c = $this->company($receipt->company_id, $u);
             $customer = $this->customer($c, $receipt->customer_id);
+            $branch = $this->branches->resolve($c, $receipt->branch_id ? (int) $receipt->branch_id : null);
+            if (! $receipt->branch_id) {
+                $receipt->update(['branch_id' => $branch->id]);
+            }
             $allocated = $receipt->allocations->sum('amount');
             if (bccomp((string) $allocated, $receipt->amount, 4) > 0) {
                 throw ValidationException::withMessages(['allocations' => 'Allocated amount exceeds receipt.']);
@@ -160,7 +168,7 @@ final class SalesService
                     throw ValidationException::withMessages(['allocations' => 'Allocation is invalid or exceeds invoice balance.']);
                 }
             }
-            $journal = $this->journals->create($c, ['financial_year_id' => $receipt->accountingPeriod->financial_year_id, 'accounting_period_id' => $receipt->accounting_period_id, 'transaction_date' => $receipt->receipt_date, 'reference' => $receipt->receipt_number, 'description' => 'Customer receipt '.$receipt->receipt_number, 'lines' => [['account_id' => $receipt->receiving_account_id, 'description' => $receipt->receipt_number, 'debit' => $receipt->amount, 'credit' => '0'], ['account_id' => $customer->receivable_account_id, 'description' => $receipt->receipt_number, 'debit' => '0', 'credit' => $receipt->amount]]], $u);
+            $journal = $this->journals->create($c, ['branch_id' => $branch->id, 'financial_year_id' => $receipt->accountingPeriod->financial_year_id, 'accounting_period_id' => $receipt->accounting_period_id, 'transaction_date' => $receipt->receipt_date, 'reference' => $receipt->receipt_number, 'description' => 'Customer receipt '.$receipt->receipt_number, 'lines' => [['account_id' => $receipt->receiving_account_id, 'description' => $receipt->receipt_number, 'debit' => $receipt->amount, 'credit' => '0'], ['account_id' => $customer->receivable_account_id, 'description' => $receipt->receipt_number, 'debit' => '0', 'credit' => $receipt->amount]]], $u);
             $this->journals->post($journal, $u);
             foreach ($receipt->allocations as $a) {
                 $invoice = $a->invoice;
