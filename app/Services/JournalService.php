@@ -19,17 +19,53 @@ final class JournalService
             throw ValidationException::withMessages(['company' => 'Inactive companies cannot accept new accounting transactions.']);
         }
         $branch = $this->branches->resolve($company, isset($data['branch_id']) ? (int) $data['branch_id'] : null);
+        $period = $this->validateDraft($company, $data);
 
-        return DB::transaction(function () use ($company, $data, $user, $branch) {
-            $period = $company->financialYears()->with('periods')->findOrFail($data['financial_year_id'])->periods->firstWhere('id', (int) $data['accounting_period_id']);
-            if (! $period) {
-                throw ValidationException::withMessages(['accounting_period_id' => 'Period does not belong to this company and financial year.']);
-            }$journal = $company->journals()->create(['branch_id' => $branch->id, 'financial_year_id' => $data['financial_year_id'], 'accounting_period_id' => $period->id, 'journal_number' => $this->nextNumber($company), 'transaction_date' => $data['transaction_date'], 'reference' => $data['reference'] ?? null, 'description' => $data['description'], 'status' => 'draft', 'created_by' => $user->id, 'updated_by' => $user->id]);
+        return DB::transaction(function () use ($company, $data, $user, $branch, $period) {
+            $journal = $company->journals()->create(['branch_id' => $branch->id, 'financial_year_id' => $period->financial_year_id, 'accounting_period_id' => $period->id, 'journal_number' => $this->nextNumber($company), 'transaction_date' => $data['transaction_date'], 'reference' => $data['reference'] ?? null, 'description' => $data['description'], 'status' => 'draft', 'created_by' => $user->id, 'updated_by' => $user->id]);
             foreach ($data['lines'] as $line) {
                 $journal->lines()->create(['company_id' => $company->id, ...$line]);
             }$this->audit->log('journal.created', $journal, $company->id, $user->id, null, $journal->toArray());
 
             return $journal->load('lines.account');
+        });
+    }
+
+    public function update(JournalEntry $journal, array $data, User $user): JournalEntry
+    {
+        $this->assertAccessible($journal->company_id, $user);
+        $company = Company::findOrFail($journal->company_id);
+        $branch = $this->branches->resolve($company, isset($data['branch_id']) ? (int) $data['branch_id'] : null);
+        $period = $this->validateDraft($company, $data);
+
+        return DB::transaction(function () use ($journal, $data, $user, $branch, $period) {
+            $journal = JournalEntry::query()->lockForUpdate()->with('lines')->findOrFail($journal->id);
+            if ($journal->status !== 'draft' || $journal->reversal_of_id) {
+                throw ValidationException::withMessages(['journal' => 'Only an ordinary Draft journal can be edited.']);
+            }
+            $before = $journal->toArray() + ['lines' => $journal->lines->toArray()];
+            $journal->update(['branch_id' => $branch->id, 'financial_year_id' => $period->financial_year_id, 'accounting_period_id' => $period->id, 'transaction_date' => $data['transaction_date'], 'reference' => $data['reference'] ?? null, 'description' => $data['description'], 'updated_by' => $user->id]);
+            $journal->lines()->delete();
+            foreach ($data['lines'] as $line) {
+                $journal->lines()->create(['company_id' => $journal->company_id, ...$line]);
+            }
+            $this->audit->log('journal.updated', $journal, $journal->company_id, $user->id, $before, $journal->fresh()->load('lines')->toArray());
+
+            return $journal->fresh()->load('lines.account');
+        });
+    }
+
+    public function deleteDraft(JournalEntry $journal, User $user): void
+    {
+        $this->assertAccessible($journal->company_id, $user);
+        DB::transaction(function () use ($journal) {
+            $journal = JournalEntry::query()->lockForUpdate()->findOrFail($journal->id);
+            if ($journal->status !== 'draft' || $journal->reversal_of_id) {
+                throw ValidationException::withMessages(['journal' => 'Only an ordinary Draft journal can be permanently deleted.']);
+            }
+            DB::table('audit_logs')->where('company_id', $journal->company_id)->where('auditable_type', JournalEntry::class)->where('auditable_id', $journal->id)->delete();
+            $journal->lines()->delete();
+            $journal->delete();
         });
     }
 
@@ -98,7 +134,33 @@ final class JournalService
 
     private function nextNumber(Company $company): string
     {
-        return 'J'.now()->format('Y').'-'.str_pad((string) ($company->journals()->count() + 1), 6, '0', STR_PAD_LEFT);
+        return 'J'.now()->format('Y').'-'.str_pad((string) (((int) $company->journals()->max('id')) + 1), 6, '0', STR_PAD_LEFT);
+    }
+
+    private function validateDraft(Company $company, array $data)
+    {
+        $period = $company->financialYears()->with('periods')->findOrFail($data['financial_year_id'])->periods->firstWhere('id', (int) $data['accounting_period_id']);
+        if (! $period) {
+            throw ValidationException::withMessages(['accounting_period_id' => 'Period does not belong to this company and financial year.']);
+        }
+        if (! now()->parse($data['transaction_date'])->betweenIncluded($period->starts_on, $period->ends_on)) {
+            throw ValidationException::withMessages(['transaction_date' => 'Journal date must fall within the selected accounting period.']);
+        }
+        if (count($data['lines']) < 2) {
+            throw ValidationException::withMessages(['lines' => 'A journal requires at least two lines.']);
+        }
+        foreach ($data['lines'] as $index => $line) {
+            if (! $company->accounts()->whereKey($line['account_id'])->where('is_active', true)->exists()) {
+                throw ValidationException::withMessages(["lines.$index.account_id" => 'Select an active account belonging to this company.']);
+            }
+            $debit = (string) ($line['debit'] ?? 0);
+            $credit = (string) ($line['credit'] ?? 0);
+            if (bccomp($debit, '0', 4) < 0 || bccomp($credit, '0', 4) < 0 || ((bccomp($debit, '0', 4) > 0) === (bccomp($credit, '0', 4) > 0))) {
+                throw ValidationException::withMessages(["lines.$index.debit" => 'Each line must contain one positive debit or credit.']);
+            }
+        }
+
+        return $period;
     }
 
     private function assertAccessible(int $companyId, User $user): void

@@ -38,6 +38,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/companies/{company}/journals/create', [JournalController::class, 'create'])->name('journals.create');
     Route::post('/companies/{company}/journals', [JournalController::class, 'store'])->name('journals.store');
     Route::get('/companies/{company}/journals/{journal}', [JournalController::class, 'show'])->name('journals.show');
+    Route::get('/companies/{company}/journals/{journal}/edit', [JournalController::class, 'edit'])->name('journals.edit');
+    Route::put('/companies/{company}/journals/{journal}', [JournalController::class, 'update'])->name('journals.update');
+    Route::delete('/companies/{company}/journals/{journal}', [JournalController::class, 'destroy'])->name('journals.destroy');
     Route::post('/companies/{company}/journals/{journal}/post', [JournalController::class, 'post'])->name('journals.post');
     Route::post('/companies/{company}/journals/{journal}/reverse', [JournalController::class, 'reverse'])->name('journals.reverse');
     Route::get('/reports', [ReportController::class, 'index'])->name('reports');

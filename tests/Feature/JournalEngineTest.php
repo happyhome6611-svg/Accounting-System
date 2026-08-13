@@ -78,8 +78,7 @@ class JournalEngineTest extends TestCase
     public function test_cross_company_account_and_closed_period_are_rejected(): void
     {
         $other = app(CompanyCreator::class)->create(['name' => 'Other', 'legal_name' => 'Other', 'country_id' => Country::first()->id, 'base_currency_id' => Currency::first()->id, 'timezone' => 'UTC', 'financial_year_start' => '2026-01-01', 'financial_year_end' => '2026-12-31'], $this->user);
-        $j = $this->journal([['account_id' => $this->company->accounts[0]->id, 'debit' => 10, 'credit' => 0], ['account_id' => $other->accounts[0]->id, 'debit' => 0, 'credit' => 10]]);
-        $this->assertThrows(fn () => $this->service->post($j, $this->user), ValidationException::class);
+        $this->assertThrows(fn () => $this->journal([['account_id' => $this->company->accounts[0]->id, 'debit' => 10, 'credit' => 0], ['account_id' => $other->accounts[0]->id, 'debit' => 0, 'credit' => 10]]), ValidationException::class);
         $j = $this->journal();
         $this->period->update(['status' => 'closed']);
         $this->assertThrows(fn () => $this->service->post($j, $this->user), ValidationException::class);
@@ -125,6 +124,6 @@ class JournalEngineTest extends TestCase
         $outsider = User::factory()->create();
         $j = $this->journal();
         $this->actingAs($outsider)->get(route('journals.show', [$this->company, $j]))->assertNotFound();
-        $this->actingAs($outsider)->get(route('reports.trial',['company_id' => $this->company->id]))->assertNotFound();
+        $this->actingAs($outsider)->get(route('reports.trial', ['company_id' => $this->company->id]))->assertNotFound();
     }
 }

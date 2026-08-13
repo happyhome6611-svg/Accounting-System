@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\JournalEntry;
 use App\Services\JournalService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class JournalController extends Controller
 {
@@ -39,6 +40,37 @@ class JournalController extends Controller
         return redirect()->route('journals.show', [$company, $journal]);
     }
 
+    public function edit(Request $r, Company $company, JournalEntry $journal)
+    {
+        $company = $r->user()->companies()->findOrFail($company->id);
+        abort_unless($journal->company_id === $company->id, 404);
+        abort_unless($journal->status === 'draft' && ! $journal->reversal_of_id, 403);
+
+        return view('accounting.edit', $this->formData($company) + ['journal' => $journal->load('lines')]);
+    }
+
+    public function update(Request $r, Company $company, JournalEntry $journal, JournalService $service)
+    {
+        $company = $r->user()->companies()->findOrFail($company->id);
+        abort_unless($journal->company_id === $company->id, 404);
+        $service->update($journal, $r->validate($this->rules()), $r->user());
+
+        return redirect()->route('journals.show', [$company, $journal])->with('success', 'Draft journal updated.');
+    }
+
+    public function destroy(Request $r, Company $company, JournalEntry $journal, JournalService $service)
+    {
+        $company = $r->user()->companies()->findOrFail($company->id);
+        abort_unless($journal->company_id === $company->id, 404);
+        $data = $r->validate(['confirmation' => 'required|string']);
+        if (! hash_equals($journal->journal_number, $data['confirmation'])) {
+            throw ValidationException::withMessages(['confirmation' => 'Enter the exact journal number to confirm permanent deletion.']);
+        }
+        $service->deleteDraft($journal, $r->user());
+
+        return redirect()->route('accounting', ['company_id' => $company->id])->with('success', 'Draft journal permanently deleted.');
+    }
+
     public function show(Request $r, Company $company, JournalEntry $journal)
     {
         $company = $r->user()->companies()->findOrFail($company->id);
@@ -62,5 +94,15 @@ class JournalController extends Controller
         $reversal = $s->reverse($journal, $r->user(), $data['accounting_period_id'], $data['transaction_date']);
 
         return redirect()->route('journals.show', [$company, $reversal]);
+    }
+
+    private function rules(): array
+    {
+        return ['branch_id' => 'nullable|integer', 'financial_year_id' => 'required|integer', 'accounting_period_id' => 'required|integer', 'transaction_date' => 'required|date', 'reference' => 'nullable|string|max:255', 'description' => 'required|string', 'lines' => 'required|array|min:2', 'lines.*.account_id' => 'required|integer', 'lines.*.description' => 'nullable|string', 'lines.*.debit' => 'required|numeric|min:0', 'lines.*.credit' => 'required|numeric|min:0'];
+    }
+
+    private function formData(Company $company): array
+    {
+        return ['company' => $company->load('baseCurrency'), 'branches' => $company->branches()->where('is_active', true)->orderByDesc('is_main_branch')->get(), 'years' => $company->financialYears()->with('periods')->get(), 'accounts' => $company->accounts()->where('is_active', true)->orderBy('code')->get()];
     }
 }
