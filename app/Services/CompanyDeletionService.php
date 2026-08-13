@@ -53,6 +53,7 @@ final class CompanyDeletionService
             DB::table('accounting_periods')->where('company_id', $locked->id)->delete();
             DB::table('financial_years')->where('company_id', $locked->id)->delete();
             DB::table('accounts')->where('company_id', $locked->id)->delete();
+            DB::table('branches')->where('company_id', $locked->id)->delete();
             DB::table('company_user')->where('company_id', $locked->id)->delete();
             DB::table('companies')->where('id', $locked->id)->delete();
         });

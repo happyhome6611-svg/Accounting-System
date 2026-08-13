@@ -14,6 +14,7 @@ final class CompanyCreator
         return DB::transaction(function () use ($data, $user) {
             $company = Company::create([...$data, 'accounting_configuration' => [], 'tax_configuration' => [], 'created_by' => $user->id, 'updated_by' => $user->id]);
             $company->users()->attach($user->id, ['role' => 'owner']);
+            $company->branches()->create(['code' => 'HO', 'name' => 'Head Office', 'timezone' => $company->timezone, 'is_active' => true, 'is_main_branch' => true, 'created_by' => $user->id, 'updated_by' => $user->id]);
             $start = CarbonImmutable::parse($data['financial_year_start']);
             $end = CarbonImmutable::parse($data['financial_year_end']);
             $year = $company->financialYears()->create(['name' => $start->format('Y').'-'.$end->format('Y'), 'starts_on' => $start, 'ends_on' => $end, 'is_current' => true, 'created_by' => $user->id, 'updated_by' => $user->id]);
@@ -26,7 +27,7 @@ final class CompanyCreator
                 $company->accounts()->create([...$account, 'created_by' => $user->id, 'updated_by' => $user->id]);
             }
 
-return $company->load(['country', 'baseCurrency', 'financialYears']);
+            return $company->load(['country', 'baseCurrency', 'financialYears']);
         });
     }
 

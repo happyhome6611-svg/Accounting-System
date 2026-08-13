@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 
 final class SalesService
 {
-    public function __construct(private DocumentNumberService $numbers, private JournalService $journals, private AuditLogger $audit) {}
+    public function __construct(private DocumentNumberService $numbers, private JournalService $journals, private AuditLogger $audit, private BranchService $branches) {}
 
     public function createCustomer(Company $company, array $data, User $user): Customer
     {
@@ -55,12 +55,13 @@ final class SalesService
         if (! $customer->is_active) {
             throw ValidationException::withMessages(['customer' => 'Inactive customers cannot be selected for new sales transactions.']);
         }
+        $branch = $this->branches->resolve($c, isset($data['branch_id']) ? (int) $data['branch_id'] : null);
 
-        return DB::transaction(function () use ($c, $data, $u, $model, $type, $prefix, $number) {
+        return DB::transaction(function () use ($c, $data, $u, $model, $type, $prefix, $number, $branch) {
             $lines = $data['lines'];
             unset($data['lines']);
             $total = $this->total($lines);
-            $doc = $model::create([...$data, 'company_id' => $c->id, $number => $this->numbers->next($c, $type, $prefix), 'subtotal' => $total, 'total' => $total, 'created_by' => $u->id, 'updated_by' => $u->id]);
+            $doc = $model::create([...$data, 'company_id' => $c->id, 'branch_id' => $branch->id, $number => $this->numbers->next($c, $type, $prefix), 'subtotal' => $total, 'total' => $total, 'created_by' => $u->id, 'updated_by' => $u->id]);
             foreach ($lines as $line) {
                 if (! empty($line['item_id']) && ! $c->items()->whereKey($line['item_id'])->where('is_active', true)->exists()) {
                     throw ValidationException::withMessages(['item' => 'Inactive or cross-company items cannot be selected.']);
@@ -81,12 +82,13 @@ final class SalesService
         if (! $customer->is_active) {
             throw ValidationException::withMessages(['customer' => 'Inactive customers cannot be invoiced.']);
         }
+        $branch = $this->branches->resolve($c, isset($data['branch_id']) ? (int) $data['branch_id'] : null);
 
-        return DB::transaction(function () use ($c, $data, $u, $customer) {
+        return DB::transaction(function () use ($c, $data, $u, $customer, $branch) {
             $lines = $data['lines'];
             unset($data['lines']);
             $total = $this->total($lines);
-            $invoice = SalesInvoice::create([...$data, 'company_id' => $c->id, 'currency_id' => $data['currency_id'] ?? $customer->currency_id, 'invoice_number' => $this->numbers->next($c, 'sales_invoice', 'INV'), 'subtotal' => $total, 'tax_amount' => 0, 'total' => $total, 'amount_paid' => 0, 'status' => 'draft', 'created_by' => $u->id, 'updated_by' => $u->id]);
+            $invoice = SalesInvoice::create([...$data, 'company_id' => $c->id, 'branch_id' => $branch->id, 'currency_id' => $data['currency_id'] ?? $customer->currency_id, 'invoice_number' => $this->numbers->next($c, 'sales_invoice', 'INV'), 'subtotal' => $total, 'tax_amount' => 0, 'total' => $total, 'amount_paid' => 0, 'status' => 'draft', 'created_by' => $u->id, 'updated_by' => $u->id]);
             foreach ($lines as $line) {
                 if (! empty($line['item_id']) && ! $c->items()->whereKey($line['item_id'])->where('is_active', true)->exists()) {
                     throw ValidationException::withMessages(['item' => 'Inactive or cross-company items cannot be selected.']);
@@ -112,7 +114,7 @@ final class SalesService
             foreach ($invoice->lines->groupBy('revenue_account_id') as $account => $lines) {
                 $credits[] = ['account_id' => $account, 'description' => $invoice->invoice_number, 'debit' => '0', 'credit' => $lines->sum('line_amount')];
             }
-            $journal = $this->journals->create($c, ['financial_year_id' => $invoice->accountingPeriod->financial_year_id, 'accounting_period_id' => $invoice->accounting_period_id, 'transaction_date' => $invoice->invoice_date->toDateString(), 'reference' => $invoice->invoice_number, 'description' => 'Sales invoice '.$invoice->invoice_number, 'lines' => [['account_id' => $invoice->customer->receivable_account_id, 'description' => $invoice->invoice_number, 'debit' => $invoice->total, 'credit' => '0'], ...$credits]], $u);
+            $journal = $this->journals->create($c, ['branch_id' => $invoice->branch_id, 'financial_year_id' => $invoice->accountingPeriod->financial_year_id, 'accounting_period_id' => $invoice->accounting_period_id, 'transaction_date' => $invoice->invoice_date->toDateString(), 'reference' => $invoice->invoice_number, 'description' => 'Sales invoice '.$invoice->invoice_number, 'lines' => [['account_id' => $invoice->customer->receivable_account_id, 'description' => $invoice->invoice_number, 'debit' => $invoice->total, 'credit' => '0'], ...$credits]], $u);
             $this->journals->post($journal, $u);
             $this->write(fn () => $invoice->update(['status' => 'posted', 'journal_entry_id' => $journal->id, 'updated_by' => $u->id]));
             $this->audit->log('invoice.posted', $invoice, $c->id, $u->id);

@@ -16,4 +16,5 @@
             <dt class="col-sm-3">Chart of Accounts</dt><dd class="col-sm-9">{{ $company->accounts->count() }} foundation accounts</dd>
         </dl>
     </div>
+    <div class="mt-3"><a class="btn btn-outline-primary" href="{{ route('companies.branches.index', $company) }}">Manage Branches</a></div>
 @endsection

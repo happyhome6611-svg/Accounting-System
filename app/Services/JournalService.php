@@ -10,7 +10,7 @@ use Illuminate\Validation\ValidationException;
 
 final class JournalService
 {
-    public function __construct(private AuditLogger $audit) {}
+    public function __construct(private AuditLogger $audit, private BranchService $branches) {}
 
     public function create(Company $company, array $data, User $user): JournalEntry
     {
@@ -18,12 +18,13 @@ final class JournalService
         if ($company->is_active === false) {
             throw ValidationException::withMessages(['company' => 'Inactive companies cannot accept new accounting transactions.']);
         }
+        $branch = $this->branches->resolve($company, isset($data['branch_id']) ? (int) $data['branch_id'] : null);
 
-        return DB::transaction(function () use ($company, $data, $user) {
+        return DB::transaction(function () use ($company, $data, $user, $branch) {
             $period = $company->financialYears()->with('periods')->findOrFail($data['financial_year_id'])->periods->firstWhere('id', (int) $data['accounting_period_id']);
             if (! $period) {
                 throw ValidationException::withMessages(['accounting_period_id' => 'Period does not belong to this company and financial year.']);
-            }$journal = $company->journals()->create(['financial_year_id' => $data['financial_year_id'], 'accounting_period_id' => $period->id, 'journal_number' => $this->nextNumber($company), 'transaction_date' => $data['transaction_date'], 'reference' => $data['reference'] ?? null, 'description' => $data['description'], 'status' => 'draft', 'created_by' => $user->id, 'updated_by' => $user->id]);
+            }$journal = $company->journals()->create(['branch_id' => $branch->id, 'financial_year_id' => $data['financial_year_id'], 'accounting_period_id' => $period->id, 'journal_number' => $this->nextNumber($company), 'transaction_date' => $data['transaction_date'], 'reference' => $data['reference'] ?? null, 'description' => $data['description'], 'status' => 'draft', 'created_by' => $user->id, 'updated_by' => $user->id]);
             foreach ($data['lines'] as $line) {
                 $journal->lines()->create(['company_id' => $company->id, ...$line]);
             }$this->audit->log('journal.created', $journal, $company->id, $user->id, null, $journal->toArray());

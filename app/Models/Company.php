@@ -55,4 +55,14 @@ class Company extends Model
     {
         return $this->hasMany(Item::class);
     }
+
+    public function branches()
+    {
+        return $this->hasMany(Branch::class);
+    }
+
+    public function salesInvoices()
+    {
+        return $this->hasMany(SalesInvoice::class);
+    }
 }
