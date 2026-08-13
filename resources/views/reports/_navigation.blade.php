@@ -9,8 +9,9 @@
 
 <div class="card bg-light p-3 mb-4">
     <div class="row g-2">
-        <div class="col-md-4"><strong>Company:</strong> {{ $c->name }}</div>
-        <div class="col-md-4"><strong>Currency:</strong> {{ $money->label($currency) }}</div>
-        <div class="col-md-4"><strong>Period:</strong> {{ $period }}</div>
+        <div class="col-md-6 col-xl-3"><strong>Company:</strong> {{ $c->name }}</div>
+        <div class="col-md-6 col-xl-3"><strong>Branch:</strong> {{ $branchLabel }}</div>
+        <div class="col-md-6 col-xl-3"><strong>Currency:</strong> {{ $money->label($currency) }}</div>
+        <div class="col-md-6 col-xl-3"><strong>Period:</strong> {{ $period }}</div>
     </div>
 </div>

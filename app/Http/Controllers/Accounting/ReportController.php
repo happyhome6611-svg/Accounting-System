@@ -62,7 +62,9 @@ class ReportController extends Controller
         $formatDate = fn (?string $date) => $date ? CarbonImmutable::parse($date)->format('d M Y') : null;
         $period = ($formatDate($request->from) ?? 'Beginning').' – '.($formatDate($request->to) ?? 'Present');
 
-        return ['filters' => $filters, 'period' => $period, 'money' => $this->money, 'currency' => $company->baseCurrency, 'branches' => $company->branches()->where('is_active', true)->get(), 'selectedBranch' => $request->branch_id];
+        $branch = $request->filled('branch_id') ? $company->branches()->findOrFail($request->integer('branch_id')) : null;
+
+        return ['filters' => $filters, 'period' => $period, 'money' => $this->money, 'currency' => $company->baseCurrency, 'branchLabel' => $branch?->name ?? 'All branches (consolidated)'];
     }
 
     private function branchId(Request $request, $company): ?int
