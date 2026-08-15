@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\ProtectsFinalSalesDocument;
 use Illuminate\Database\Eloquent\Model;
 
 class CustomerReceipt extends Model
 {
+    use ProtectsFinalSalesDocument;
+
     protected $guarded = [];
 
     protected function casts(): array
@@ -21,5 +24,20 @@ class CustomerReceipt extends Model
     public function accountingPeriod()
     {
         return $this->belongsTo(AccountingPeriod::class);
+    }
+
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    public function journal()
+    {
+        return $this->belongsTo(JournalEntry::class, 'journal_entry_id');
     }
 }

@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\ProtectsFinalSalesDocument;
 use Illuminate\Database\Eloquent\Model;
 
 class SalesOrder extends Model
 {
+    use ProtectsFinalSalesDocument;
+
     protected $guarded = [];
 
     protected function casts(): array
@@ -16,5 +19,25 @@ class SalesOrder extends Model
     public function lines()
     {
         return $this->hasMany(SalesOrderLine::class);
+    }
+
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    public function quotation()
+    {
+        return $this->belongsTo(SalesQuotation::class, 'sales_quotation_id');
+    }
+
+    public function convertedInvoice()
+    {
+        return $this->hasOne(SalesInvoice::class);
     }
 }

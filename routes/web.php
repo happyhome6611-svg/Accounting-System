@@ -9,6 +9,7 @@ use App\Http\Controllers\Company\CompanyController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Sales\ReceivablesController;
 use App\Http\Controllers\Sales\SalesController;
+use App\Http\Controllers\Sales\SalesTransactionController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
@@ -63,8 +64,18 @@ Route::middleware('auth')->group(function () {
     Route::patch('/companies/{company}/items/{item}/status', [SalesController::class, 'itemStatus'])->name('sales.items.status');
     Route::get('/companies/{company}/items/{item}/delete', [SalesController::class, 'confirmItemDelete'])->name('sales.items.delete');
     Route::delete('/companies/{company}/items/{item}', [SalesController::class, 'destroyItem'])->name('sales.items.destroy');
-    Route::get('/companies/{company}/sales-invoices', [SalesController::class, 'invoices'])->name('sales.invoices');
-    Route::get('/companies/{company}/sales/{type}', [SalesController::class, 'documents'])->name('sales.documents');
+    Route::get('/companies/{company}/sales/{type}', [SalesTransactionController::class, 'index'])->name('sales.transactions.index');
+    Route::get('/companies/{company}/sales/{type}/create', [SalesTransactionController::class, 'create'])->name('sales.transactions.create');
+    Route::post('/companies/{company}/sales/{type}', [SalesTransactionController::class, 'store'])->name('sales.transactions.store');
+    Route::get('/companies/{company}/sales/{type}/{document}', [SalesTransactionController::class, 'show'])->whereNumber('document')->name('sales.transactions.show');
+    Route::get('/companies/{company}/sales/{type}/{document}/edit', [SalesTransactionController::class, 'edit'])->whereNumber('document')->name('sales.transactions.edit');
+    Route::put('/companies/{company}/sales/{type}/{document}', [SalesTransactionController::class, 'update'])->whereNumber('document')->name('sales.transactions.update');
+    Route::delete('/companies/{company}/sales/{type}/{document}', [SalesTransactionController::class, 'destroy'])->whereNumber('document')->name('sales.transactions.destroy');
+    Route::post('/companies/{company}/sales/{type}/{document}/post', [SalesTransactionController::class, 'post'])->whereNumber('document')->name('sales.transactions.post');
+    Route::post('/companies/{company}/quotations/{quotation}/convert', [SalesTransactionController::class, 'convertQuotation'])->name('sales.quotations.convert');
+    Route::post('/companies/{company}/orders/{order}/convert', [SalesTransactionController::class, 'convertOrder'])->name('sales.orders.convert');
+    Route::get('/companies/{company}/sales-invoices', [SalesTransactionController::class, 'invoicesIndex'])->name('sales.invoices');
+    Route::get('/companies/{company}/sales-documents/{type}', [SalesTransactionController::class, 'legacyIndex'])->name('sales.documents');
     Route::post('/companies/{company}/sales-invoices/{invoice}/post', [SalesController::class, 'postInvoice'])->name('sales.invoices.post');
     Route::get('/reports/accounts-receivable', [ReceivablesController::class, 'ar'])->name('reports.ar');
     Route::get('/reports/ar-aging', [ReceivablesController::class, 'aging'])->name('reports.ar-aging');

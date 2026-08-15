@@ -34,14 +34,31 @@ class SalesInvoice extends Model
         return $this->hasMany(CustomerReceiptAllocation::class);
     }
 
+    public function creditNotes()
+    {
+        return $this->hasMany(SalesCreditNote::class);
+    }
+
     public function accountingPeriod()
     {
         return $this->belongsTo(AccountingPeriod::class);
     }
 
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    public function order()
+    {
+        return $this->belongsTo(SalesOrder::class, 'sales_order_id');
+    }
+
     public function getAmountDueAttribute(): string
     {
-        return bcsub($this->total, $this->amount_paid, 4);
+        $credited = $this->creditNotes()->where('status', 'posted')->sum('total');
+
+        return bcsub(bcsub($this->total, $this->amount_paid, 4), (string) $credited, 4);
     }
 
     protected static function booted(): void

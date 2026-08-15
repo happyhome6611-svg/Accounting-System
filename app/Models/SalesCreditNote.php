@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\ProtectsFinalSalesDocument;
 use Illuminate\Database\Eloquent\Model;
 
 class SalesCreditNote extends Model
 {
+    use ProtectsFinalSalesDocument;
+
     protected $guarded = [];
 
     protected function casts(): array
@@ -26,5 +29,20 @@ class SalesCreditNote extends Model
     public function journal()
     {
         return $this->belongsTo(JournalEntry::class, 'journal_entry_id');
+    }
+
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    public function invoice()
+    {
+        return $this->belongsTo(SalesInvoice::class, 'sales_invoice_id');
     }
 }
