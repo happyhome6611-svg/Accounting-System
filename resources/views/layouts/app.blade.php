@@ -11,6 +11,12 @@
         .card { border: 0; box-shadow: 0 .25rem 1rem rgba(20, 40, 70, .08); }
         .sidebar a { color: #30415d; text-decoration: none; padding: .65rem .8rem; border-radius: .4rem; }
         .sidebar a:hover { background: #e8eef7; }
+        .sales-decimal-input,
+        #sales-lines input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+        .sales-decimal-input::-webkit-inner-spin-button,
+        .sales-decimal-input::-webkit-outer-spin-button,
+        #sales-lines input[type="number"]::-webkit-inner-spin-button,
+        #sales-lines input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     </style>
 </head>
 <body>
@@ -47,5 +53,18 @@
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('wheel', function (event) {
+            if (event.target.matches('.sales-decimal-input, #sales-lines input[type="number"]')) {
+                event.preventDefault();
+            }
+        }, { passive: false });
+        document.addEventListener('keydown', function (event) {
+            if (event.target.matches('.sales-decimal-input, #sales-lines input[type="number"]')
+                && ['ArrowUp', 'ArrowDown'].includes(event.key)) {
+                event.preventDefault();
+            }
+        });
+    </script>
 </body>
 </html>

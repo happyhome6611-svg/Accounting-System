@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Company;
 use App\Models\Country;
 use App\Models\Currency;
+use App\Models\SalesQuotation;
 use App\Models\User;
 use App\Services\CompanyCreator;
 use App\Services\SalesService;
@@ -84,11 +85,18 @@ class SalesTransactionWorkflowTest extends TestCase
         $quotation = $this->workflow->create($this->company, 'quotations', $data, $this->user);
         $this->assertSame('1.2345', $quotation->lines()->first()->quantity);
         $this->assertSame('12.3456', $quotation->lines()->latest('id')->first()->unit_price);
+        $this->assertSame('154.1906', $quotation->total);
         $this->assertCount(2, $quotation->lines);
 
         $this->actingAs($this->user)->get(route('sales.transactions.edit', [$this->company, 'quotations', $quotation]))
             ->assertOk()
             ->assertSee('step="0.01"', false)
+            ->assertSee('sales-decimal-input', false)
+            ->assertSee('inputmode="decimal"', false)
+            ->assertSee('::-webkit-inner-spin-button', false)
+            ->assertSee('-moz-appearance: textfield', false)
+            ->assertSee('event.preventDefault()', false)
+            ->assertSee("['ArrowUp', 'ArrowDown']", false)
             ->assertSee('Unit Price ('.$this->company->baseCurrency->code.')')
             ->assertSee('Discount Amount ('.$this->company->baseCurrency->code.')')
             ->assertSee('+ Add Line')
@@ -100,6 +108,22 @@ class SalesTransactionWorkflowTest extends TestCase
         $updated = $this->workflow->update($this->company, 'quotations', $quotation, $data, $this->user);
         $this->assertCount(1, $updated->lines);
         $this->assertSame('Second line', $updated->lines->first()->description);
+    }
+
+    public function test_manually_typed_decimal_quantity_and_price_are_accepted_and_keep_fixed_scale_totals(): void
+    {
+        $data = $this->quotationData();
+        $data['lines'][0]['quantity'] = '1.5';
+        $data['lines'][0]['unit_price'] = '100.50';
+
+        $this->actingAs($this->user)
+            ->post(route('sales.transactions.store', [$this->company, 'quotations']), $data)
+            ->assertRedirect();
+
+        $quotation = SalesQuotation::query()->latest('id')->firstOrFail();
+        $this->assertSame('1.5000', $quotation->lines->first()->quantity);
+        $this->assertSame('100.5000', $quotation->lines->first()->unit_price);
+        $this->assertSame('150.7500', $quotation->total);
     }
 
     public function test_partial_and_full_receipts_allocate_and_post_once(): void
