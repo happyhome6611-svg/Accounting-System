@@ -203,6 +203,10 @@ final class SalesWorkflowService
             if (bccomp((string) $line['quantity'], '0', 4) <= 0 || bccomp((string) $line['unit_price'], '0', 4) < 0) {
                 throw ValidationException::withMessages(["lines.$index.quantity" => 'Quantity must be positive and price cannot be negative.']);
             }
+            $gross = bcmul((string) $line['quantity'], (string) $line['unit_price'], 4);
+            if (bccomp((string) ($line['discount'] ?? 0), $gross, 4) > 0) {
+                throw ValidationException::withMessages(["lines.$index.discount" => 'Discount amount cannot exceed the line gross amount.']);
+            }
         }
     }
 

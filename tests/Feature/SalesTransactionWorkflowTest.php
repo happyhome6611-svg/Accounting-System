@@ -76,6 +76,32 @@ class SalesTransactionWorkflowTest extends TestCase
         $this->assertDatabaseMissing('sales_quotations', ['id' => $quotation->id]);
     }
 
+    public function test_shared_line_editor_uses_sensible_precision_fixed_decimal_totals_and_preserves_multiple_lines(): void
+    {
+        $data = $this->quotationData();
+        $data['lines'][0]['quantity'] = '1.2345';
+        $data['lines'][] = ['item_id' => $this->item->id, 'revenue_account_id' => $this->item->revenue_account_id, 'description' => 'Second line', 'quantity' => '2.5000', 'unit_price' => '12.3456', 'discount' => '0.1234'];
+        $quotation = $this->workflow->create($this->company, 'quotations', $data, $this->user);
+        $this->assertSame('1.2345', $quotation->lines()->first()->quantity);
+        $this->assertSame('12.3456', $quotation->lines()->latest('id')->first()->unit_price);
+        $this->assertCount(2, $quotation->lines);
+
+        $this->actingAs($this->user)->get(route('sales.transactions.edit', [$this->company, 'quotations', $quotation]))
+            ->assertOk()
+            ->assertSee('step="0.01"', false)
+            ->assertSee('Unit Price ('.$this->company->baseCurrency->code.')')
+            ->assertSee('Discount Amount ('.$this->company->baseCurrency->code.')')
+            ->assertSee('+ Add Line')
+            ->assertSee('lines[1][quantity]', false)
+            ->assertSee('scaledDecimal', false)
+            ->assertSee('Document Total:', false);
+
+        array_shift($data['lines']);
+        $updated = $this->workflow->update($this->company, 'quotations', $quotation, $data, $this->user);
+        $this->assertCount(1, $updated->lines);
+        $this->assertSame('Second line', $updated->lines->first()->description);
+    }
+
     public function test_partial_and_full_receipts_allocate_and_post_once(): void
     {
         $invoice = $this->sales->postInvoice($this->invoice(), $this->user);
