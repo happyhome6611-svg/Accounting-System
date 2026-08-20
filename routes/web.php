@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Company\BranchController;
 use App\Http\Controllers\Company\CompanyController;
 use App\Http\Controllers\Company\FinancialYearController;
+use App\Http\Controllers\Company\PriorPeriodAdjustmentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Sales\ReceivablesController;
 use App\Http\Controllers\Sales\SalesController;
@@ -29,8 +30,13 @@ Route::middleware('auth')->group(function () {
     Route::delete('/companies/{company}', [CompanyController::class, 'destroy'])->name('companies.destroy');
     Route::get('/companies/{company}/financial-years', [FinancialYearController::class, 'index'])->name('companies.financial-years.index');
     Route::post('/companies/{company}/financial-years', [FinancialYearController::class, 'store'])->name('companies.financial-years.store');
+    Route::post('/companies/{company}/financial-years/{financialYear}/begin-closing', [FinancialYearController::class, 'beginClosing'])->name('companies.financial-years.begin-closing');
     Route::post('/companies/{company}/financial-years/{financialYear}/close', [FinancialYearController::class, 'close'])->name('companies.financial-years.close');
     Route::post('/companies/{company}/financial-years/{financialYear}/reopen', [FinancialYearController::class, 'reopen'])->name('companies.financial-years.reopen');
+    Route::post('/companies/{company}/financial-years/{financialYear}/periods/{period}/close', [FinancialYearController::class, 'closePeriod'])->name('companies.financial-years.periods.close');
+    Route::post('/companies/{company}/financial-years/{financialYear}/periods/{period}/reopen', [FinancialYearController::class, 'reopenPeriod'])->name('companies.financial-years.periods.reopen');
+    Route::get('/companies/{company}/prior-period-adjustments/create', [PriorPeriodAdjustmentController::class, 'create'])->name('companies.prior-adjustments.create');
+    Route::post('/companies/{company}/prior-period-adjustments', [PriorPeriodAdjustmentController::class, 'store'])->name('companies.prior-adjustments.store');
     Route::resource('/companies/{company}/branches', BranchController::class)->except(['show'])->names([
         'index' => 'companies.branches.index',
         'create' => 'companies.branches.create',

@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\Country;
 use App\Models\Currency;
 use App\Models\User;
+use App\Services\AccountingPeriodService;
 use App\Services\CarryForwardService;
 use App\Services\CompanyCreator;
 use App\Services\FinancialYearResolver;
@@ -64,7 +65,8 @@ class EntityFinancialYearFoundationTest extends TestCase
         $period = app(FinancialYearResolver::class)->resolve($this->company, '2026-04-15');
         $this->assertSame($year->id, $period->financial_year_id);
         $this->assertThrows(fn () => app(FinancialYearResolver::class)->resolve($this->company, '2035-01-01'), ValidationException::class);
-        app(FinancialYearService::class)->close($year, 'Approved annual close', $this->user);
+        app(FinancialYearService::class)->beginClosing($year, 'Approved annual close preparation', $this->user);
+        app(FinancialYearService::class)->close($year->fresh(), 'Approved annual close', $this->user);
         $this->assertThrows(fn () => app(FinancialYearResolver::class)->resolve($this->company, '2026-04-15'), ValidationException::class);
     }
 
@@ -72,10 +74,12 @@ class EntityFinancialYearFoundationTest extends TestCase
     {
         $year = $this->company->financialYears()->first();
         $service = app(FinancialYearService::class);
-        $service->close($year, 'Approved annual close', $this->user);
+        $service->beginClosing($year, 'Approved annual close preparation', $this->user);
+        $service->close($year->fresh(), 'Approved annual close', $this->user);
         $service->reopen($year->fresh(), 'Correction authorised by owner', $this->user);
         $this->assertDatabaseHas('audit_logs', ['company_id' => $this->company->id, 'event' => 'financial_year.closed']);
         $this->assertDatabaseHas('audit_logs', ['company_id' => $this->company->id, 'event' => 'financial_year.reopened']);
+        $service->beginClosing($year->fresh(), 'Final close preparation before filing', $this->user);
         $service->close($year->fresh(), 'Final close before filing', $this->user);
         $service->markFiled($year->fresh(), 'Generic filing reference', $this->user);
         $this->assertDatabaseHas('audit_logs', ['company_id' => $this->company->id, 'event' => 'financial_year.filed']);
@@ -95,7 +99,8 @@ class EntityFinancialYearFoundationTest extends TestCase
     public function test_prior_period_adjustment_and_carry_forward_are_explicit_and_entity_scoped(): void
     {
         $origin = $this->company->financialYears()->first();
-        app(FinancialYearService::class)->close($origin, 'Approved annual close', $this->user);
+        app(FinancialYearService::class)->beginClosing($origin, 'Approved annual close preparation', $this->user);
+        app(FinancialYearService::class)->close($origin->fresh(), 'Approved annual close', $this->user);
         $destination = app(FinancialYearService::class)->create($this->company, ['name' => '2027-2028', 'starts_on' => '2027-04-01', 'ends_on' => '2028-03-31'], $this->user);
         $adjustment = app(PriorPeriodAdjustmentService::class)->create($this->company, ['origin_financial_year_id' => $origin->id, 'adjustment_financial_year_id' => $destination->id, 'adjustment_type' => 'accounting_correction', 'reason' => 'Missed expense identified after close'], $this->user);
         $this->assertSame($origin->id, $adjustment->origin_financial_year_id);
@@ -116,6 +121,44 @@ class EntityFinancialYearFoundationTest extends TestCase
             ->assertOk()->assertSee('Financial Year:')->assertSee($year->name)->assertSee('financial_year_id='.$year->id, false);
         $outsider = User::factory()->create();
         $this->actingAs($outsider)->get(route('companies.financial-years.index', $this->company))->assertNotFound();
+    }
+
+    public function test_closing_state_and_period_close_reopen_enforce_posting_and_audit(): void
+    {
+        $year = $this->company->financialYears()->first();
+        $period = $year->periods()->first();
+        $periods = app(AccountingPeriodService::class);
+        $periods->close($period, 'Month end review completed', $this->user);
+        $this->assertThrows(fn () => app(FinancialYearResolver::class)->resolve($this->company, $period->starts_on->toDateString()), ValidationException::class);
+        $periods->reopen($period->fresh(), 'Authorised correction required', $this->user);
+        $this->assertDatabaseHas('audit_logs', ['event' => 'accounting_period.closed', 'auditable_id' => $period->id]);
+        $this->assertDatabaseHas('audit_logs', ['event' => 'accounting_period.reopened', 'auditable_id' => $period->id]);
+        $years = app(FinancialYearService::class);
+        $this->assertThrows(fn () => $years->close($year, 'Cannot skip Closing state', $this->user), ValidationException::class);
+        $years->beginClosing($year, 'Year end finalisation commenced', $this->user);
+        $this->assertSame('closing', $year->fresh()->status);
+        $this->assertThrows(fn () => app(FinancialYearResolver::class)->resolve($this->company, $period->starts_on->toDateString()), ValidationException::class);
+    }
+
+    public function test_no_current_year_dashboard_does_not_fall_back_or_mix_historical_data(): void
+    {
+        $historical = app(CompanyCreator::class)->create(['entity_type' => 'individual', 'name' => 'Historical Person', 'individual_name' => 'Historical Person', 'country_id' => Country::where('code', 'NZ')->value('id'), 'base_currency_id' => Currency::where('code', 'NZD')->value('id'), 'timezone' => 'Pacific/Auckland', 'financial_year_start' => '2020-01-01', 'financial_year_end' => '2020-12-31'], $this->user);
+        $this->actingAs($this->user)->get(route('dashboard', ['company_id' => $historical->id]))
+            ->assertOk()->assertSee('No current Financial Year configured.')->assertSee('No accounting activity yet.');
+    }
+
+    public function test_prior_period_adjustment_entry_point_preserves_origin_and_audit(): void
+    {
+        $origin = $this->company->financialYears()->first();
+        $years = app(FinancialYearService::class);
+        $years->beginClosing($origin, 'Year end finalisation commenced', $this->user);
+        $years->close($origin->fresh(), 'Approved annual close', $this->user);
+        $destination = $years->create($this->company, ['name' => '2027-2028', 'starts_on' => '2027-04-01', 'ends_on' => '2028-03-31'], $this->user);
+        $this->actingAs($this->user)->get(route('companies.prior-adjustments.create', [$this->company, 'origin_financial_year_id' => $origin->id]))
+            ->assertOk()->assertSee('No automatic posting')->assertSee($origin->name);
+        $this->post(route('companies.prior-adjustments.store', $this->company), ['origin_financial_year_id' => $origin->id, 'adjustment_financial_year_id' => $destination->id, 'adjustment_type' => 'source_document_omission', 'reason' => 'Missed source document found after close', 'source_reference' => 'INV-LEGACY-42'])->assertRedirect();
+        $this->assertDatabaseHas('prior_period_adjustments', ['company_id' => $this->company->id, 'origin_financial_year_id' => $origin->id, 'adjustment_financial_year_id' => $destination->id, 'source_reference' => 'INV-LEGACY-42', 'status' => 'draft']);
+        $this->assertDatabaseHas('audit_logs', ['company_id' => $this->company->id, 'event' => 'prior_period_adjustment.created']);
     }
 
     private function entity(string $type, string $name): Company

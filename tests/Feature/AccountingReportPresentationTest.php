@@ -31,7 +31,7 @@ class AccountingReportPresentationTest extends TestCase
         $this->actingAs($user);
 
         foreach (['reports.ledger', 'reports.trial', 'reports.profit-loss', 'reports.balance-sheet'] as $route) {
-            $response = $this->get(route($route, $filters))->assertOk()->assertSee('Company:')->assertSee('NZ Books')->assertSee('Branch:')->assertSee('ABC Branch1')->assertSee('Currency:')->assertSee('NZ$ (NZD)')->assertSee('Period:')->assertSee('01 Apr 2025 – 30 Apr 2025')->assertSee('company_id='.$company->id, false)->assertSee('branch_id='.$branch->id, false)->assertSee('from=2025-04-01', false)->assertSee('to=2025-04-30', false)->assertSee('account_id='.$filters['account_id'], false);
+            $response = $this->get(route($route, $filters))->assertOk()->assertSee('Accounting Entity:')->assertSee('NZ Books')->assertSee('Branch:')->assertSee('ABC Branch1')->assertSee('Currency:')->assertSee('NZ$ (NZD)')->assertSee('Period:')->assertSee('01 Apr 2025 – 30 Apr 2025')->assertSee('company_id='.$company->id, false)->assertSee('branch_id='.$branch->id, false)->assertSee('from=2025-04-01', false)->assertSee('to=2025-04-30', false)->assertSee('account_id='.$filters['account_id'], false);
             if ($route === 'reports.ledger') {
                 $response->assertSee('1000 — Cash and Cash Equivalents')->assertSee('15 Apr 2025')->assertSee('NZ$100.00');
             }

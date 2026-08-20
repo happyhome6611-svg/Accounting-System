@@ -16,8 +16,8 @@ final class PriorPeriodAdjustmentService
     {
         $origin = $entity->financialYears()->findOrFail($data['origin_financial_year_id']);
         $adjustment = $entity->financialYears()->findOrFail($data['adjustment_financial_year_id']);
-        if ($origin->status === 'open') {
-            throw ValidationException::withMessages(['origin_financial_year_id' => 'An open prior year accepts a normal correction and does not require an adjustment record.']);
+        if (! in_array($origin->status, ['closed', 'filed'], true)) {
+            throw ValidationException::withMessages(['origin_financial_year_id' => 'A Prior-Period Adjustment requires a Closed or Filed origin Financial Year.']);
         }
         if ($adjustment->status !== 'open') {
             throw ValidationException::withMessages(['adjustment_financial_year_id' => 'The adjustment Financial Year must be open.']);

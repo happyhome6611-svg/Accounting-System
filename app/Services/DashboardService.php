@@ -39,6 +39,11 @@ final class DashboardService
         return ['cash' => (string) $cash, 'receivables' => $receivables, 'sales' => $sales, 'expenses' => $expenses, 'profit' => $profit, 'open_invoices' => $open->count(), 'overdue_invoices' => $open->filter(fn ($invoice) => $invoice->due_date?->isPast() && bccomp($invoice->amount_due, '0', 4) > 0)->count(), 'activity' => $activity];
     }
 
+    public function emptyMetrics(): array
+    {
+        return ['cash' => '0.0000', 'receivables' => '0.0000', 'sales' => '0.0000', 'expenses' => '0.0000', 'profit' => '0.0000', 'open_invoices' => 0, 'overdue_invoices' => 0, 'activity' => collect()];
+    }
+
     private function transactionActivity(string $table, string $date, string $reference, string $type, string $amount, int $companyId, ?int $branchId, ?int $financialYearId, $branchNames)
     {
         return DB::table($table)->where('company_id', $companyId)->where('status', 'posted')->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->when($financialYearId, fn ($query) => $query->where('financial_year_id', $financialYearId))->latest($date)->limit(8)->get()->map(fn ($row) => ['date' => $row->{$date}, 'type' => $type, 'reference' => $row->{$reference}, 'branch' => $branchNames[$row->branch_id] ?? '', 'amount' => $row->{$amount}, 'status' => $row->status]);

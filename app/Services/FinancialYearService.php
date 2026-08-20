@@ -35,14 +35,28 @@ final class FinancialYearService
 
     public function close(FinancialYear $year, string $reason, User $user): FinancialYear
     {
-        if ($year->status !== 'open') {
-            throw ValidationException::withMessages(['status' => 'Only an open Financial Year can be closed.']);
+        if ($year->status !== 'closing') {
+            throw ValidationException::withMessages(['status' => 'A Financial Year must enter Closing before it can be Closed.']);
         }
 
         return DB::transaction(function () use ($year, $reason, $user) {
             $year->periods()->where('status', 'open')->update(['status' => 'closed', 'locked_at' => now(), 'updated_by' => $user->id]);
             $year->update(['status' => 'closed', 'closed_at' => now(), 'closed_by' => $user->id, 'updated_by' => $user->id]);
-            $this->audit->log('financial_year.closed', $year, $year->company_id, $user->id, ['status' => 'open'], ['status' => 'closed', 'reason' => $reason]);
+            $this->audit->log('financial_year.closed', $year, $year->company_id, $user->id, ['status' => 'closing'], ['status' => 'closed', 'reason' => $reason]);
+
+            return $year;
+        });
+    }
+
+    public function beginClosing(FinancialYear $year, string $reason, User $user): FinancialYear
+    {
+        if ($year->status !== 'open') {
+            throw ValidationException::withMessages(['status' => 'Only an open Financial Year can enter Closing.']);
+        }
+
+        return DB::transaction(function () use ($year, $reason, $user) {
+            $year->update(['status' => 'closing', 'updated_by' => $user->id]);
+            $this->audit->log('financial_year.closing', $year, $year->company_id, $user->id, ['status' => 'open'], ['status' => 'closing', 'reason' => $reason]);
 
             return $year;
         });

@@ -125,7 +125,7 @@ class SalesTransactionController extends Controller
     {
         $company = $this->company($request, $company);
         abort_unless($order->company_id === $company->id, 404);
-        $data = $request->validate(['accounting_period_id' => 'required|integer', 'invoice_date' => 'required|date', 'due_date' => 'required|date|after_or_equal:invoice_date']);
+        $data = $request->validate(['accounting_period_id' => 'nullable|integer', 'invoice_date' => 'required|date', 'due_date' => 'required|date|after_or_equal:invoice_date']);
         $invoice = $workflow->orderToInvoice($company, $order, $data, $request->user());
 
         return redirect()->route('sales.transactions.show', [$company, 'invoices', $invoice]);
@@ -147,22 +147,22 @@ class SalesTransactionController extends Controller
     {
         [, $title, $singular] = $this->definition($type);
 
-        return compact('company', 'type', 'title', 'singular') + ['company' => $company->load('baseCurrency'), 'branches' => $company->branches()->where('is_active', true)->get(), 'customers' => $company->customers()->where('is_active', true)->orderBy('name')->get(), 'items' => $company->items()->where('is_active', true)->with('revenueAccount')->orderBy('name')->get(), 'accounts' => $company->accounts()->where('is_active', true)->orderBy('code')->get(), 'years' => $company->financialYears()->with(['periods' => fn ($q) => $q->where('status', 'open')])->get(), 'invoices' => $company->salesInvoices()->whereIn('status', ['posted', 'partially_paid'])->with('customer')->get()];
+        return compact('company', 'type', 'title', 'singular') + ['company' => $company->load('baseCurrency'), 'branches' => $company->branches()->where('is_active', true)->get(), 'customers' => $company->customers()->where('is_active', true)->orderBy('name')->get(), 'items' => $company->items()->where('is_active', true)->with('revenueAccount')->orderBy('name')->get(), 'accounts' => $company->accounts()->where('is_active', true)->orderBy('code')->get(), 'years' => $company->financialYears()->with('periods')->get(), 'invoices' => $company->salesInvoices()->whereIn('status', ['posted', 'partially_paid'])->with('customer')->get()];
     }
 
     private function rules(string $type): array
     {
         $common = ['customer_id' => 'required|integer', 'branch_id' => 'nullable|integer', 'financial_year_id' => 'nullable|integer'];
         if ($type === 'receipts') {
-            return $common + ['accounting_period_id' => 'required|integer', 'receipt_date' => 'required|date', 'amount' => 'required|numeric|min:0.01', 'payment_method' => 'required|string|max:32', 'reference' => 'nullable|string|max:255', 'receiving_account_id' => 'required|integer', 'allocations' => 'nullable|array', 'allocations.*.sales_invoice_id' => 'required|integer', 'allocations.*.amount' => 'required|numeric|min:0'];
+            return $common + ['accounting_period_id' => 'nullable|integer', 'receipt_date' => 'required|date', 'amount' => 'required|numeric|min:0.01', 'payment_method' => 'required|string|max:32', 'reference' => 'nullable|string|max:255', 'receiving_account_id' => 'required|integer', 'allocations' => 'nullable|array', 'allocations.*.sales_invoice_id' => 'required|integer', 'allocations.*.amount' => 'required|numeric|min:0'];
         }
         $lineRules = ['lines' => 'required|array|min:1', 'lines.*.item_id' => 'nullable|integer', 'lines.*.revenue_account_id' => 'required|integer', 'lines.*.description' => 'required|string', 'lines.*.quantity' => 'required|numeric|min:0.0001', 'lines.*.unit_price' => 'required|numeric|min:0', 'lines.*.discount' => 'nullable|numeric|min:0'];
 
         return match ($type) {
             'quotations' => $common + ['quotation_date' => 'required|date', 'expiry_date' => 'nullable|date|after_or_equal:quotation_date', 'customer_reference' => 'nullable|string|max:255', 'notes' => 'nullable|string'] + $lineRules,
             'orders' => $common + ['order_date' => 'required|date', 'customer_reference' => 'nullable|string|max:255', 'notes' => 'nullable|string'] + $lineRules,
-            'invoices' => $common + ['accounting_period_id' => 'required|integer', 'invoice_date' => 'required|date', 'due_date' => 'required|date|after_or_equal:invoice_date', 'customer_reference' => 'nullable|string|max:255', 'notes' => 'nullable|string'] + $lineRules,
-            'credit-notes' => $common + ['sales_invoice_id' => 'required|integer', 'accounting_period_id' => 'required|integer', 'credit_note_date' => 'required|date', 'notes' => 'nullable|string'] + $lineRules,
+            'invoices' => $common + ['accounting_period_id' => 'nullable|integer', 'invoice_date' => 'required|date', 'due_date' => 'required|date|after_or_equal:invoice_date', 'customer_reference' => 'nullable|string|max:255', 'notes' => 'nullable|string'] + $lineRules,
+            'credit-notes' => $common + ['sales_invoice_id' => 'required|integer', 'accounting_period_id' => 'nullable|integer', 'credit_note_date' => 'required|date', 'notes' => 'nullable|string'] + $lineRules,
             default => abort(404),
         };
     }

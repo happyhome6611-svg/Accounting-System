@@ -130,6 +130,8 @@ class SalesTransactionWorkflowTest extends TestCase
     {
         $invoice = $this->sales->postInvoice($this->invoice(), $this->user);
         $partial = $this->workflow->create($this->company, 'receipts', $this->receiptData($invoice, 40), $this->user);
+        $this->assertSame($this->period->id, $partial->accounting_period_id);
+        $this->assertSame($this->period->financial_year_id, $partial->financial_year_id);
         $this->sales->postReceipt($partial, $this->user);
         $this->assertSame('partially_paid', $invoice->fresh()->status);
         $this->assertSame('40.0000', $invoice->fresh()->amount_paid);
@@ -144,6 +146,8 @@ class SalesTransactionWorkflowTest extends TestCase
     {
         $invoice = $this->sales->postInvoice($this->invoice(), $this->user);
         $credit = $this->workflow->create($this->company, 'credit-notes', $this->creditData($invoice, 25), $this->user);
+        $this->assertSame($this->period->id, $credit->accounting_period_id);
+        $this->assertSame($this->period->financial_year_id, $credit->financial_year_id);
         $this->sales->postCreditNote($credit, $this->user);
         $this->assertSame('posted', $credit->fresh()->status);
         $this->assertSame($credit->branch_id, $credit->fresh()->journal->branch_id);
@@ -158,17 +162,21 @@ class SalesTransactionWorkflowTest extends TestCase
 
     private function invoice()
     {
-        return $this->workflow->create($this->company, 'invoices', ['customer_id' => $this->customer->id, 'branch_id' => $this->company->branches()->first()->id, 'accounting_period_id' => $this->period->id, 'invoice_date' => '2026-01-05', 'due_date' => '2026-02-05', 'lines' => $this->lines()], $this->user);
+        $invoice = $this->workflow->create($this->company, 'invoices', ['customer_id' => $this->customer->id, 'branch_id' => $this->company->branches()->first()->id, 'invoice_date' => '2026-01-05', 'due_date' => '2026-02-05', 'lines' => $this->lines()], $this->user);
+        $this->assertSame($this->period->id, $invoice->accounting_period_id);
+        $this->assertSame($this->period->financial_year_id, $invoice->financial_year_id);
+
+        return $invoice;
     }
 
     private function receiptData($invoice, float $amount): array
     {
-        return ['customer_id' => $this->customer->id, 'branch_id' => $invoice->branch_id, 'accounting_period_id' => $this->period->id, 'receipt_date' => '2026-01-15', 'amount' => $amount, 'payment_method' => 'Bank Transfer', 'reference' => 'PAY', 'receiving_account_id' => $this->company->accounts()->where('code', '1000')->value('id'), 'allocations' => [['sales_invoice_id' => $invoice->id, 'amount' => $amount]]];
+        return ['customer_id' => $this->customer->id, 'branch_id' => $invoice->branch_id, 'receipt_date' => '2026-01-15', 'amount' => $amount, 'payment_method' => 'Bank Transfer', 'reference' => 'PAY', 'receiving_account_id' => $this->company->accounts()->where('code', '1000')->value('id'), 'allocations' => [['sales_invoice_id' => $invoice->id, 'amount' => $amount]]];
     }
 
     private function creditData($invoice, float $amount): array
     {
-        return ['customer_id' => $this->customer->id, 'branch_id' => $invoice->branch_id, 'sales_invoice_id' => $invoice->id, 'accounting_period_id' => $this->period->id, 'credit_note_date' => '2026-01-15', 'notes' => 'Adjustment', 'lines' => [['item_id' => $this->item->id, 'revenue_account_id' => $this->item->revenue_account_id, 'description' => 'Credit', 'quantity' => 1, 'unit_price' => $amount]]];
+        return ['customer_id' => $this->customer->id, 'branch_id' => $invoice->branch_id, 'sales_invoice_id' => $invoice->id, 'credit_note_date' => '2026-01-15', 'notes' => 'Adjustment', 'lines' => [['item_id' => $this->item->id, 'revenue_account_id' => $this->item->revenue_account_id, 'description' => 'Credit', 'quantity' => 1, 'unit_price' => $amount]]];
     }
 
     private function lines(): array

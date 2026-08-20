@@ -19,8 +19,8 @@ class DashboardController extends Controller
         $branches = $supportsBranches ? $company->branches()->where('is_active', true)->orderByDesc('is_main_branch')->get() : collect();
         $branchId = $supportsBranches && $request->filled('branch_id') ? $company->branches()->where('is_active', true)->findOrFail($request->integer('branch_id'))->id : null;
         $financialYears = $company->financialYears()->orderByDesc('starts_on')->get();
-        $financialYear = $request->filled('financial_year_id') ? $company->financialYears()->findOrFail($request->integer('financial_year_id')) : $company->financialYears()->whereDate('starts_on', '<=', today())->whereDate('ends_on', '>=', today())->first() ?? $financialYears->first();
-        $metrics = $dashboard->metrics($company, $branchId, $financialYear?->id);
+        $financialYear = $request->filled('financial_year_id') ? $company->financialYears()->findOrFail($request->integer('financial_year_id')) : $company->financialYears()->whereDate('starts_on', '<=', today())->whereDate('ends_on', '>=', today())->first();
+        $metrics = $financialYear ? $dashboard->metrics($company, $branchId, $financialYear->id) : $dashboard->emptyMetrics();
         $period = $financialYear?->periods()->whereDate('starts_on', '<=', today())->whereDate('ends_on', '>=', today())->first();
 
         return view('dashboard.index', compact('companies', 'company', 'supportsBranches', 'branches', 'branchId', 'metrics', 'financialYears', 'financialYear', 'period', 'money'));
