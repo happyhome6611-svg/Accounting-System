@@ -11,6 +11,9 @@ final class DashboardService
 
     public function metrics(Company $company, ?int $branchId, ?int $financialYearId = null): array
     {
+        abort_if($branchId && ! $company->supportsBranches(), 404);
+        abort_if($branchId && ! $company->branches()->whereKey($branchId)->exists(), 404);
+        abort_if($financialYearId && ! $company->financialYears()->whereKey($financialYearId)->exists(), 404);
         $scope = fn ($query) => $query->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($financialYearId, fn ($q) => $q->where('financial_year_id', $financialYearId));
         $invoices = $scope($company->salesInvoices()->whereIn('status', ['posted', 'partially_paid', 'paid']));
         $monthStart = now()->startOfMonth()->toDateString();

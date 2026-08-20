@@ -27,7 +27,7 @@ class SalesController extends Controller
 
     public function index(Request $r)
     {
-        return view('sales.index', ['companies' => $r->user()->companies()->get()]);
+        return view('sales.index', ['companies' => $r->user()->companies()->where('entity_type', '!=', 'individual')->get()]);
     }
 
     public function customers(Request $r, Company $company, CustomerMaintenanceService $maintenance, MoneyFormatter $money)

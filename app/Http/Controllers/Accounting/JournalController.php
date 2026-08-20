@@ -18,7 +18,7 @@ class JournalController extends Controller
 
     public function index(Request $r)
     {
-        $companies = $r->user()->companies()->get();
+        $companies = $r->user()->companies()->where('entity_type', '!=', 'individual')->get();
         $company = $r->company_id ? $this->company($r) : $companies->first();
 
         return view('accounting.index', ['companies' => $companies, 'company' => $company, 'journals' => $company?->journals()->latest()->get() ?? collect()]);
