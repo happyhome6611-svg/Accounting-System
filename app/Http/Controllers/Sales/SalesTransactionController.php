@@ -152,7 +152,7 @@ class SalesTransactionController extends Controller
 
     private function rules(string $type): array
     {
-        $common = ['customer_id' => 'required|integer', 'branch_id' => 'nullable|integer'];
+        $common = ['customer_id' => 'required|integer', 'branch_id' => 'nullable|integer', 'financial_year_id' => 'nullable|integer'];
         if ($type === 'receipts') {
             return $common + ['accounting_period_id' => 'required|integer', 'receipt_date' => 'required|date', 'amount' => 'required|numeric|min:0.01', 'payment_method' => 'required|string|max:32', 'reference' => 'nullable|string|max:255', 'receiving_account_id' => 'required|integer', 'allocations' => 'nullable|array', 'allocations.*.sales_invoice_id' => 'required|integer', 'allocations.*.amount' => 'required|numeric|min:0'];
         }

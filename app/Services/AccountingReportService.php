@@ -8,13 +8,15 @@ use Illuminate\Support\Facades\DB;
 
 final class AccountingReportService
 {
-    private function balances(Company $c, ?string $from = null, ?string $to = null, ?int $branchId = null): Collection
+    private function balances(Company $c, ?string $from = null, ?string $to = null, ?int $branchId = null, ?int $financialYearId = null): Collection
     {
         $q = DB::table('journal_lines as l')->join('journal_entries as j', 'j.id', '=', 'l.journal_entry_id')->join('accounts as a', 'a.id', '=', 'l.account_id')->where('j.company_id', $c->id)->whereIn('j.status', ['posted', 'reversed'])->select('a.id', 'a.code', 'a.name', 'a.type', 'a.normal_balance', DB::raw('SUM(l.debit) as debits'), DB::raw('SUM(l.credit) as credits'))->groupBy('a.id', 'a.code', 'a.name', 'a.type', 'a.normal_balance')->orderBy('a.code');
         if ($from) {
             $q->whereDate('j.transaction_date', '>=', $from);
         }if ($branchId) {
             $q->where('j.branch_id', $branchId);
+        }if ($financialYearId) {
+            $q->where('j.financial_year_id', $financialYearId);
         }if ($to) {
             $q->whereDate('j.transaction_date', '<=', $to);
         }
@@ -22,7 +24,7 @@ final class AccountingReportService
         return $q->get();
     }
 
-    public function generalLedger(Company $c, int $accountId, ?string $from = null, ?string $to = null, ?int $branchId = null): Collection
+    public function generalLedger(Company $c, int $accountId, ?string $from = null, ?string $to = null, ?int $branchId = null, ?int $financialYearId = null): Collection
     {
         $account = $c->accounts()->findOrFail($accountId);
         $q = DB::table('journal_lines as l')->join('journal_entries as j', 'j.id', '=', 'l.journal_entry_id')->where('j.company_id', $c->id)->where('l.account_id', $account->id)->whereIn('j.status', ['posted', 'reversed'])->orderBy('j.transaction_date')->orderBy('j.id')->select('j.transaction_date', 'j.journal_number', 'j.reference', 'j.description', 'l.debit', 'l.credit');
@@ -30,6 +32,8 @@ final class AccountingReportService
             $q->whereDate('j.transaction_date', '>=', $from);
         }if ($branchId) {
             $q->where('j.branch_id', $branchId);
+        }if ($financialYearId) {
+            $q->where('j.financial_year_id', $financialYearId);
         }if ($to) {
             $q->whereDate('j.transaction_date', '<=', $to);
         }$running = '0.0000';
@@ -43,9 +47,9 @@ final class AccountingReportService
         });
     }
 
-    public function trialBalance(Company $c, ?string $to = null, ?int $branchId = null): array
+    public function trialBalance(Company $c, ?string $to = null, ?int $branchId = null, ?int $financialYearId = null): array
     {
-        $rows = $this->balances($c, null, $to, $branchId)->map(function ($r) {
+        $rows = $this->balances($c, null, $to, $branchId, $financialYearId)->map(function ($r) {
             $net = bcsub($r->debits, $r->credits, 4);
             $r->debit_balance = bccomp($net, '0', 4) > 0 ? $net : '0.0000';
             $r->credit_balance = bccomp($net, '0', 4) < 0 ? bcmul($net, '-1', 4) : '0.0000';
@@ -56,23 +60,23 @@ final class AccountingReportService
         return ['rows' => $rows, 'debit' => $rows->reduce(fn ($x, $r) => bcadd($x, $r->debit_balance, 4), '0.0000'), 'credit' => $rows->reduce(fn ($x, $r) => bcadd($x, $r->credit_balance, 4), '0.0000')];
     }
 
-    public function profitAndLoss(Company $c, ?string $from = null, ?string $to = null, ?int $branchId = null): array
+    public function profitAndLoss(Company $c, ?string $from = null, ?string $to = null, ?int $branchId = null, ?int $financialYearId = null): array
     {
-        $rows = $this->balances($c, $from, $to, $branchId);
+        $rows = $this->balances($c, $from, $to, $branchId, $financialYearId);
         $revenue = $rows->where('type', 'revenue')->reduce(fn ($x, $r) => bcadd($x, bcsub($r->credits, $r->debits, 4), 4), '0.0000');
         $expenses = $rows->where('type', 'expense')->reduce(fn ($x, $r) => bcadd($x, bcsub($r->debits, $r->credits, 4), 4), '0.0000');
 
         return compact('revenue', 'expenses') + ['net' => bcsub($revenue, $expenses, 4)];
     }
 
-    public function balanceSheet(Company $c, ?string $to = null, ?int $branchId = null): array
+    public function balanceSheet(Company $c, ?string $to = null, ?int $branchId = null, ?int $financialYearId = null): array
     {
-        $rows = $this->balances($c, null, $to, $branchId);
+        $rows = $this->balances($c, null, $to, $branchId, $financialYearId);
         $sum = fn ($type, $debit) => $rows->where('type', $type)->reduce(fn ($x, $r) => bcadd($x, $debit ? bcsub($r->debits, $r->credits, 4) : bcsub($r->credits, $r->debits, 4), 4), '0.0000');
         $assets = $sum('asset', true);
         $liabilities = $sum('liability', false);
         $equity = $sum('equity', false);
-        $earnings = $this->profitAndLoss($c, null, $to, $branchId)['net'];
+        $earnings = $this->profitAndLoss($c, null, $to, $branchId, $financialYearId)['net'];
 
         return compact('assets', 'liabilities', 'equity', 'earnings') + ['liabilities_and_equity' => bcadd(bcadd($liabilities, $equity, 4), $earnings, 4)];
     }

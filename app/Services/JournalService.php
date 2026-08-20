@@ -10,7 +10,7 @@ use Illuminate\Validation\ValidationException;
 
 final class JournalService
 {
-    public function __construct(private AuditLogger $audit, private BranchService $branches) {}
+    public function __construct(private AuditLogger $audit, private BranchService $branches, private FinancialYearResolver $years) {}
 
     public function create(Company $company, array $data, User $user): JournalEntry
     {
@@ -139,13 +139,7 @@ final class JournalService
 
     private function validateDraft(Company $company, array $data)
     {
-        $period = $company->financialYears()->with('periods')->findOrFail($data['financial_year_id'])->periods->firstWhere('id', (int) $data['accounting_period_id']);
-        if (! $period) {
-            throw ValidationException::withMessages(['accounting_period_id' => 'Period does not belong to this company and financial year.']);
-        }
-        if (! now()->parse($data['transaction_date'])->betweenIncluded($period->starts_on, $period->ends_on)) {
-            throw ValidationException::withMessages(['transaction_date' => 'Journal date must fall within the selected accounting period.']);
-        }
+        $period = $this->years->resolve($company, $data['transaction_date'], isset($data['financial_year_id']) ? (int) $data['financial_year_id'] : null, isset($data['accounting_period_id']) ? (int) $data['accounting_period_id'] : null);
         if (count($data['lines']) < 2) {
             throw ValidationException::withMessages(['lines' => 'A journal requires at least two lines.']);
         }

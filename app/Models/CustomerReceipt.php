@@ -26,6 +26,11 @@ class CustomerReceipt extends Model
         return $this->belongsTo(AccountingPeriod::class);
     }
 
+    public function financialYear()
+    {
+        return $this->belongsTo(FinancialYear::class);
+    }
+
     public function customer()
     {
         return $this->belongsTo(Customer::class);

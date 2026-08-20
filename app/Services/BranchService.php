@@ -34,6 +34,9 @@ final class BranchService
     public function create(Company $company, array $data, User $user): Branch
     {
         $this->access($company, $user);
+        if (! $company->supportsBranches()) {
+            throw ValidationException::withMessages(['entity_type' => 'Branches do not apply to an Individual accounting entity.']);
+        }
         if (! empty($data['is_main_branch']) && $company->branches()->where('is_main_branch', true)->exists()) {
             throw ValidationException::withMessages(['is_main_branch' => 'The company already has a main branch.']);
         }

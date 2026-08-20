@@ -34,7 +34,7 @@ class JournalController extends Controller
     public function store(Request $r, JournalService $service)
     {
         $company = $this->company($r);
-        $data = $r->validate(['branch_id' => 'nullable|integer', 'financial_year_id' => 'required|integer', 'accounting_period_id' => 'required|integer', 'transaction_date' => 'required|date', 'reference' => 'nullable|string|max:255', 'description' => 'required|string', 'lines' => 'required|array|min:2', 'lines.*.account_id' => 'required|integer', 'lines.*.description' => 'nullable|string', 'lines.*.debit' => 'required|numeric|min:0', 'lines.*.credit' => 'required|numeric|min:0']);
+        $data = $r->validate(['branch_id' => 'nullable|integer', 'financial_year_id' => 'nullable|integer', 'accounting_period_id' => 'nullable|integer', 'transaction_date' => 'required|date', 'reference' => 'nullable|string|max:255', 'description' => 'required|string', 'lines' => 'required|array|min:2', 'lines.*.account_id' => 'required|integer', 'lines.*.description' => 'nullable|string', 'lines.*.debit' => 'required|numeric|min:0', 'lines.*.credit' => 'required|numeric|min:0']);
         $journal = $service->create($company, $data, $r->user());
 
         return redirect()->route('journals.show', [$company, $journal]);
@@ -98,7 +98,7 @@ class JournalController extends Controller
 
     private function rules(): array
     {
-        return ['branch_id' => 'nullable|integer', 'financial_year_id' => 'required|integer', 'accounting_period_id' => 'required|integer', 'transaction_date' => 'required|date', 'reference' => 'nullable|string|max:255', 'description' => 'required|string', 'lines' => 'required|array|min:2', 'lines.*.account_id' => 'required|integer', 'lines.*.description' => 'nullable|string', 'lines.*.debit' => 'required|numeric|min:0', 'lines.*.credit' => 'required|numeric|min:0'];
+        return ['branch_id' => 'nullable|integer', 'financial_year_id' => 'nullable|integer', 'accounting_period_id' => 'nullable|integer', 'transaction_date' => 'required|date', 'reference' => 'nullable|string|max:255', 'description' => 'required|string', 'lines' => 'required|array|min:2', 'lines.*.account_id' => 'required|integer', 'lines.*.description' => 'nullable|string', 'lines.*.debit' => 'required|numeric|min:0', 'lines.*.credit' => 'required|numeric|min:0'];
     }
 
     private function formData(Company $company): array

@@ -26,6 +26,11 @@ class SalesQuotation extends Model
         return $this->belongsTo(Customer::class);
     }
 
+    public function financialYear()
+    {
+        return $this->belongsTo(FinancialYear::class);
+    }
+
     public function branch()
     {
         return $this->belongsTo(Branch::class);

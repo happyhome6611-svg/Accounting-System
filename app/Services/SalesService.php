@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 
 final class SalesService
 {
-    public function __construct(private DocumentNumberService $numbers, private JournalService $journals, private AuditLogger $audit, private BranchService $branches) {}
+    public function __construct(private DocumentNumberService $numbers, private JournalService $journals, private AuditLogger $audit, private BranchService $branches, private FinancialYearResolver $years) {}
 
     public function createCustomer(Company $company, array $data, User $user): Customer
     {
@@ -56,6 +56,9 @@ final class SalesService
             throw ValidationException::withMessages(['customer' => 'Inactive customers cannot be selected for new sales transactions.']);
         }
         $branch = $this->branches->resolve($c, isset($data['branch_id']) ? (int) $data['branch_id'] : null);
+        $dateField = $model === SalesQuotation::class ? 'quotation_date' : 'order_date';
+        $period = $this->years->resolve($c, $data[$dateField], isset($data['financial_year_id']) ? (int) $data['financial_year_id'] : null, null, false);
+        $data['financial_year_id'] = $period->financial_year_id;
 
         return DB::transaction(function () use ($c, $data, $u, $model, $type, $prefix, $number, $branch) {
             $lines = $data['lines'];
@@ -83,6 +86,9 @@ final class SalesService
             throw ValidationException::withMessages(['customer' => 'Inactive customers cannot be invoiced.']);
         }
         $branch = $this->branches->resolve($c, isset($data['branch_id']) ? (int) $data['branch_id'] : null);
+        $period = $this->years->resolve($c, $data['invoice_date'], isset($data['financial_year_id']) ? (int) $data['financial_year_id'] : null, isset($data['accounting_period_id']) ? (int) $data['accounting_period_id'] : null);
+        $data['financial_year_id'] = $period->financial_year_id;
+        $data['accounting_period_id'] = $period->id;
 
         return DB::transaction(function () use ($c, $data, $u, $customer, $branch) {
             $lines = $data['lines'];

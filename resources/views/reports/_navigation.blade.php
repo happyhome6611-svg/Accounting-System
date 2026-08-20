@@ -11,6 +11,7 @@
     <div class="row g-2">
         <div class="col-md-6 col-xl-3"><strong>Company:</strong> {{ $c->name }}</div>
         <div class="col-md-6 col-xl-3"><strong>Branch:</strong> {{ $branchLabel }}</div>
+        <div class="col-md-6 col-xl-3"><strong>Financial Year:</strong> {{ $financialYearLabel }}</div>
         <div class="col-md-6 col-xl-3"><strong>Currency:</strong> {{ $money->label($currency) }}</div>
         <div class="col-md-6 col-xl-3"><strong>Period:</strong> {{ $period }}</div>
     </div>

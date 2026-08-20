@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 
 final class SalesWorkflowService
 {
-    public function __construct(private SalesService $sales, private DocumentNumberService $numbers, private BranchService $branches, private AuditLogger $audit) {}
+    public function __construct(private SalesService $sales, private DocumentNumberService $numbers, private BranchService $branches, private AuditLogger $audit, private FinancialYearResolver $years) {}
 
     public function create(Company $company, string $type, array $data, User $user): Model
     {
@@ -99,6 +99,16 @@ final class SalesWorkflowService
 
     private function updateLineDocument(Company $company, Model $document, array $data, User $user): Model
     {
+        $dateField = match (true) {
+            $document instanceof SalesQuotation => 'quotation_date',
+            $document instanceof SalesOrder => 'order_date',
+            default => 'invoice_date',
+        };
+        $period = $this->years->resolve($company, $data[$dateField], isset($data['financial_year_id']) ? (int) $data['financial_year_id'] : null, isset($data['accounting_period_id']) ? (int) $data['accounting_period_id'] : null, ! ($document instanceof SalesQuotation || $document instanceof SalesOrder));
+        $data['financial_year_id'] = $period->financial_year_id;
+        if ($document instanceof SalesInvoice) {
+            $data['accounting_period_id'] = $period->id;
+        }
         $branch = $this->branches->resolve($company, isset($data['branch_id']) ? (int) $data['branch_id'] : null);
         $customer = $company->customers()->where('is_active', true)->findOrFail($data['customer_id']);
         $lines = $data['lines'];
@@ -127,6 +137,9 @@ final class SalesWorkflowService
 
     private function saveCreditNote(Company $company, SalesCreditNote $note, array $data, User $user): SalesCreditNote
     {
+        $period = $this->years->resolve($company, $data['credit_note_date'], isset($data['financial_year_id']) ? (int) $data['financial_year_id'] : null, isset($data['accounting_period_id']) ? (int) $data['accounting_period_id'] : null);
+        $data['financial_year_id'] = $period->financial_year_id;
+        $data['accounting_period_id'] = $period->id;
         $branch = $this->branches->resolve($company, isset($data['branch_id']) ? (int) $data['branch_id'] : null);
         $customer = $company->customers()->where('is_active', true)->findOrFail($data['customer_id']);
         $invoice = $company->salesInvoices()->where('customer_id', $customer->id)->whereIn('status', ['posted', 'partially_paid', 'paid'])->findOrFail($data['sales_invoice_id']);
@@ -139,7 +152,7 @@ final class SalesWorkflowService
             throw ValidationException::withMessages(['total' => 'Credit note exceeds the invoice remaining balance.']);
         }
         DB::transaction(function () use ($company, $note, $data, $lines, $branch, $customer, $invoice, $total, $user) {
-            $values = ['company_id' => $company->id, 'customer_id' => $customer->id, 'branch_id' => $branch->id, 'sales_invoice_id' => $invoice->id, 'accounting_period_id' => $data['accounting_period_id'], 'credit_note_date' => $data['credit_note_date'], 'notes' => $data['notes'] ?? null, 'total' => $total, 'updated_by' => $user->id];
+            $values = ['company_id' => $company->id, 'customer_id' => $customer->id, 'branch_id' => $branch->id, 'sales_invoice_id' => $invoice->id, 'financial_year_id' => $data['financial_year_id'], 'accounting_period_id' => $data['accounting_period_id'], 'credit_note_date' => $data['credit_note_date'], 'notes' => $data['notes'] ?? null, 'total' => $total, 'updated_by' => $user->id];
             if (! $note->exists) {
                 $values += ['credit_note_number' => $this->numbers->next($company, 'credit_note', 'CN'), 'status' => 'draft', 'created_by' => $user->id];
                 $note->fill($values)->save();
@@ -158,6 +171,9 @@ final class SalesWorkflowService
 
     private function saveReceipt(Company $company, CustomerReceipt $receipt, array $data, User $user): CustomerReceipt
     {
+        $period = $this->years->resolve($company, $data['receipt_date'], isset($data['financial_year_id']) ? (int) $data['financial_year_id'] : null, isset($data['accounting_period_id']) ? (int) $data['accounting_period_id'] : null);
+        $data['financial_year_id'] = $period->financial_year_id;
+        $data['accounting_period_id'] = $period->id;
         $branch = $this->branches->resolve($company, isset($data['branch_id']) ? (int) $data['branch_id'] : null);
         $customer = $company->customers()->where('is_active', true)->findOrFail($data['customer_id']);
         $company->accounts()->where('is_active', true)->findOrFail($data['receiving_account_id']);
@@ -173,7 +189,7 @@ final class SalesWorkflowService
             }
         }
         DB::transaction(function () use ($company, $receipt, $data, $allocations, $branch, $customer, $user) {
-            $values = ['company_id' => $company->id, 'customer_id' => $customer->id, 'branch_id' => $branch->id, 'accounting_period_id' => $data['accounting_period_id'], 'receipt_date' => $data['receipt_date'], 'amount' => $data['amount'], 'payment_method' => $data['payment_method'], 'reference' => $data['reference'] ?? null, 'receiving_account_id' => $data['receiving_account_id'], 'updated_by' => $user->id];
+            $values = ['company_id' => $company->id, 'customer_id' => $customer->id, 'branch_id' => $branch->id, 'financial_year_id' => $data['financial_year_id'], 'accounting_period_id' => $data['accounting_period_id'], 'receipt_date' => $data['receipt_date'], 'amount' => $data['amount'], 'payment_method' => $data['payment_method'], 'reference' => $data['reference'] ?? null, 'receiving_account_id' => $data['receiving_account_id'], 'updated_by' => $user->id];
             if (! $receipt->exists) {
                 $values += ['receipt_number' => $this->numbers->next($company, 'customer_receipt', 'REC'), 'status' => 'draft', 'created_by' => $user->id];
                 $receipt->fill($values)->save();

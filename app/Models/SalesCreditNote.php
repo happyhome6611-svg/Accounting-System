@@ -26,6 +26,11 @@ class SalesCreditNote extends Model
         return $this->belongsTo(AccountingPeriod::class);
     }
 
+    public function financialYear()
+    {
+        return $this->belongsTo(FinancialYear::class);
+    }
+
     public function journal()
     {
         return $this->belongsTo(JournalEntry::class, 'journal_entry_id');

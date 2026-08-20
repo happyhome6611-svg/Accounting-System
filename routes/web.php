@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Company\BranchController;
 use App\Http\Controllers\Company\CompanyController;
+use App\Http\Controllers\Company\FinancialYearController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Sales\ReceivablesController;
 use App\Http\Controllers\Sales\SalesController;
@@ -26,6 +27,10 @@ Route::middleware('auth')->group(function () {
     Route::patch('/companies/{company}/status', [CompanyController::class, 'status'])->name('companies.status');
     Route::get('/companies/{company}/delete', [CompanyController::class, 'confirmDelete'])->name('companies.delete');
     Route::delete('/companies/{company}', [CompanyController::class, 'destroy'])->name('companies.destroy');
+    Route::get('/companies/{company}/financial-years', [FinancialYearController::class, 'index'])->name('companies.financial-years.index');
+    Route::post('/companies/{company}/financial-years', [FinancialYearController::class, 'store'])->name('companies.financial-years.store');
+    Route::post('/companies/{company}/financial-years/{financialYear}/close', [FinancialYearController::class, 'close'])->name('companies.financial-years.close');
+    Route::post('/companies/{company}/financial-years/{financialYear}/reopen', [FinancialYearController::class, 'reopen'])->name('companies.financial-years.reopen');
     Route::resource('/companies/{company}/branches', BranchController::class)->except(['show'])->names([
         'index' => 'companies.branches.index',
         'create' => 'companies.branches.create',

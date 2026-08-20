@@ -18,4 +18,14 @@ abstract class AbstractCountryModule implements CountryModule
     {
         return [];
     }
+
+    public function supportedEntityTypes(): array
+    {
+        return ['company', 'individual', 'sole_trader'];
+    }
+
+    public function taxProfile(string $entityType): array
+    {
+        return ['country' => $this->countryCode(), 'entity_type' => $entityType, 'calculation_engine' => null];
+    }
 }

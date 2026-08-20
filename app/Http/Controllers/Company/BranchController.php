@@ -13,7 +13,10 @@ class BranchController extends Controller
 {
     private function company(Request $request, Company $company): Company
     {
-        return $request->user()->companies()->findOrFail($company->id);
+        $company = $request->user()->companies()->findOrFail($company->id);
+        abort_unless($company->supportsBranches(), 404);
+
+        return $company;
     }
 
     public function index(Request $request, Company $company, BranchService $service)

@@ -11,4 +11,8 @@ interface CountryModule
     public function invoiceRequirements(): array;
 
     public function reportingRequirements(): array;
+
+    public function supportedEntityTypes(): array;
+
+    public function taxProfile(string $entityType): array;
 }

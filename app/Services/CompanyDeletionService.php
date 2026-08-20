@@ -49,6 +49,11 @@ final class CompanyDeletionService
             }
 
             DB::table('audit_logs')->where('company_id', $locked->id)->delete();
+            DB::table('tax_filing_periods')->where('company_id', $locked->id)->delete();
+            DB::table('tax_obligations')->where('company_id', $locked->id)->delete();
+            DB::table('tax_years')->where('company_id', $locked->id)->delete();
+            DB::table('prior_period_adjustments')->where('company_id', $locked->id)->delete();
+            DB::table('carry_forwards')->where('company_id', $locked->id)->delete();
             DB::table('document_sequences')->where('company_id', $locked->id)->delete();
             DB::table('accounting_periods')->where('company_id', $locked->id)->delete();
             DB::table('financial_years')->where('company_id', $locked->id)->delete();

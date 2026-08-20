@@ -9,7 +9,7 @@ class Company extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['name', 'legal_name', 'country_id', 'base_currency_id', 'timezone', 'address', 'email', 'phone', 'registration_identifiers', 'is_active', 'accounting_configuration', 'tax_configuration', 'created_by', 'updated_by'];
+    protected $fillable = ['entity_type', 'name', 'legal_name', 'individual_name', 'trading_name', 'country_id', 'base_currency_id', 'timezone', 'address', 'email', 'phone', 'registration_identifiers', 'is_active', 'accounting_configuration', 'tax_configuration', 'created_by', 'updated_by'];
 
     protected function casts(): array
     {
@@ -59,6 +59,25 @@ class Company extends Model
     public function branches()
     {
         return $this->hasMany(Branch::class);
+    }
+
+    public function supportsBranches(): bool
+    {
+        return in_array($this->entity_type, ['company', 'sole_trader', 'partnership', 'trust', 'other'], true);
+    }
+
+    public function getEntityLabelAttribute(): string
+    {
+        return match ($this->entity_type) {
+            'individual' => $this->individual_name ?: $this->name,
+            'sole_trader' => $this->trading_name ?: $this->individual_name ?: $this->name,
+            default => $this->name,
+        };
+    }
+
+    public function taxYears()
+    {
+        return $this->hasMany(TaxYear::class);
     }
 
     public function salesInvoices()

@@ -19,7 +19,7 @@ class ReportController extends Controller
 
     public function index(Request $r)
     {
-        return view('reports.index', ['companies' => $r->user()->companies()->with(['branches' => fn ($q) => $q->where('is_active', true)->orderBy('code'), 'accounts' => fn ($q) => $q->where('is_active', true)->orderBy('code')])->get()]);
+        return view('reports.index', ['companies' => $r->user()->companies()->with(['branches' => fn ($q) => $q->where('is_active', true)->orderBy('code'), 'accounts' => fn ($q) => $q->where('is_active', true)->orderBy('code'), 'financialYears' => fn ($q) => $q->orderByDesc('starts_on')])->get()]);
     }
 
     public function ledger(Request $r)
@@ -27,7 +27,7 @@ class ReportController extends Controller
         $c = $this->company($r)->load('baseCurrency');
         $account = $c->accounts()->findOrFail($r->integer('account_id'));
         $branchId = $this->branchId($r, $c);
-        $rows = $this->reports->generalLedger($c, $r->integer('account_id'), $r->from, $r->to, $branchId);
+        $rows = $this->reports->generalLedger($c, $r->integer('account_id'), $r->from, $r->to, $branchId, $this->financialYearId($r, $c));
 
         return view('reports.ledger', compact('c', 'rows', 'account') + $this->presentation($r, $c));
     }
@@ -35,7 +35,7 @@ class ReportController extends Controller
     public function trial(Request $r)
     {
         $c = $this->company($r)->load('baseCurrency');
-        $report = $this->reports->trialBalance($c, $r->to, $this->branchId($r, $c));
+        $report = $this->reports->trialBalance($c, $r->to, $this->branchId($r, $c), $this->financialYearId($r, $c));
 
         return view('reports.trial', compact('c', 'report') + $this->presentation($r, $c));
     }
@@ -43,7 +43,7 @@ class ReportController extends Controller
     public function profitLoss(Request $r)
     {
         $c = $this->company($r)->load('baseCurrency');
-        $report = $this->reports->profitAndLoss($c, $r->from, $r->to, $this->branchId($r, $c));
+        $report = $this->reports->profitAndLoss($c, $r->from, $r->to, $this->branchId($r, $c), $this->financialYearId($r, $c));
 
         return view('reports.profit-loss', compact('c', 'report') + $this->presentation($r, $c));
     }
@@ -51,24 +51,31 @@ class ReportController extends Controller
     public function balanceSheet(Request $r)
     {
         $c = $this->company($r)->load('baseCurrency');
-        $report = $this->reports->balanceSheet($c, $r->to, $this->branchId($r, $c));
+        $report = $this->reports->balanceSheet($c, $r->to, $this->branchId($r, $c), $this->financialYearId($r, $c));
 
         return view('reports.balance-sheet', compact('c', 'report') + $this->presentation($r, $c));
     }
 
     private function presentation(Request $request, $company): array
     {
-        $filters = array_filter(['company_id' => $company->id, 'branch_id' => $request->branch_id, 'from' => $request->from, 'to' => $request->to, 'account_id' => $request->account_id], fn ($value) => $value !== null && $value !== '');
+        $filters = array_filter(['company_id' => $company->id, 'branch_id' => $request->branch_id, 'financial_year_id' => $request->financial_year_id, 'from' => $request->from, 'to' => $request->to, 'account_id' => $request->account_id], fn ($value) => $value !== null && $value !== '');
         $formatDate = fn (?string $date) => $date ? CarbonImmutable::parse($date)->format('d M Y') : null;
         $period = ($formatDate($request->from) ?? 'Beginning').' – '.($formatDate($request->to) ?? 'Present');
 
         $branch = $request->filled('branch_id') ? $company->branches()->findOrFail($request->integer('branch_id')) : null;
 
-        return ['filters' => $filters, 'period' => $period, 'money' => $this->money, 'currency' => $company->baseCurrency, 'branchLabel' => $branch?->name ?? 'All branches (consolidated)'];
+        $financialYear = $request->filled('financial_year_id') ? $company->financialYears()->findOrFail($request->integer('financial_year_id')) : null;
+
+        return ['filters' => $filters, 'period' => $period, 'money' => $this->money, 'currency' => $company->baseCurrency, 'branchLabel' => $branch?->name ?? 'All branches (consolidated)', 'financialYearLabel' => $financialYear?->name ?? 'All Financial Years'];
     }
 
     private function branchId(Request $request, $company): ?int
     {
         return $request->filled('branch_id') ? $company->branches()->findOrFail($request->integer('branch_id'))->id : null;
+    }
+
+    private function financialYearId(Request $request, $company): ?int
+    {
+        return $request->filled('financial_year_id') ? $company->financialYears()->findOrFail($request->integer('financial_year_id'))->id : null;
     }
 }
