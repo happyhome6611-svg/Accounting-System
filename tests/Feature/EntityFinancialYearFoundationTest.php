@@ -123,6 +123,39 @@ class EntityFinancialYearFoundationTest extends TestCase
         $this->actingAs($outsider)->get(route('companies.financial-years.index', $this->company))->assertNotFound();
     }
 
+    public function test_entity_cards_and_details_expose_scoped_financial_year_navigation(): void
+    {
+        $individual = $this->entity('individual', 'Navigation Individual');
+        $trader = $this->entity('sole_trader', 'Navigation Trader');
+
+        $response = $this->actingAs($this->user)->get(route('companies.index'))->assertOk();
+        $html = $response->getContent();
+
+        $this->assertSame(3, substr_count($html, '>Manage Financial Years</a>'));
+        $this->assertSame(2, substr_count($html, '>Manage Branches</a>'));
+        foreach ([$this->company, $individual, $trader] as $entity) {
+            $response->assertSee(route('companies.financial-years.index', $entity), false);
+            $this->get(route('companies.show', $entity))
+                ->assertOk()
+                ->assertSeeInOrder(['Edit', 'Manage Financial Years'])
+                ->assertSee(route('companies.financial-years.index', $entity), false);
+            $this->get(route('companies.financial-years.index', $entity))
+                ->assertOk()
+                ->assertSee($entity->entity_label);
+        }
+
+        $this->get(route('companies.show', $individual))->assertDontSee('Manage Branches');
+        $this->get(route('companies.show', $this->company))->assertSee('Manage Branches');
+
+        $other = $this->entity('company', 'Other Entity');
+        $foreignYear = $other->financialYears()->first();
+        $this->post(route('companies.financial-years.begin-closing', [$this->company, $foreignYear]), [
+            'reason' => 'Forged cross-entity lifecycle request',
+            'confirmation' => 'BEGIN CLOSING',
+        ])->assertNotFound();
+        $this->assertSame('open', $foreignYear->fresh()->status);
+    }
+
     public function test_closing_state_and_period_close_reopen_enforce_posting_and_audit(): void
     {
         $year = $this->company->financialYears()->first();

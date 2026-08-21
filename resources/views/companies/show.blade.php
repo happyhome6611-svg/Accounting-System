@@ -17,5 +17,11 @@
             <dt class="col-sm-3">Chart of Accounts</dt><dd class="col-sm-9">{{ $company->accounts->count() }} foundation accounts</dd>
         </dl>
     </div>
-    <div class="mt-3 d-flex gap-2">@if($company->supportsBranches())<a class="btn btn-outline-primary" href="{{ route('companies.branches.index', $company) }}">Manage Branches</a>@endif<a class="btn btn-outline-primary" href="{{ route('companies.financial-years.index', $company) }}">Manage Financial Years</a></div>
+    <div class="mt-3 d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-primary" href="{{ route('companies.edit', $company) }}">Edit</a>
+        <a class="btn btn-outline-primary" href="{{ route('companies.financial-years.index', $company) }}">Manage Financial Years</a>
+        @if($company->supportsBranches())
+            <a class="btn btn-outline-primary" href="{{ route('companies.branches.index', $company) }}">Manage Branches</a>
+        @endif
+    </div>
 @endsection
