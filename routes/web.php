@@ -31,8 +31,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/companies/{company}/financial-years', [FinancialYearController::class, 'index'])->name('companies.financial-years.index');
     Route::post('/companies/{company}/financial-years', [FinancialYearController::class, 'store'])->name('companies.financial-years.store');
     Route::post('/companies/{company}/financial-years/{financialYear}/begin-closing', [FinancialYearController::class, 'beginClosing'])->name('companies.financial-years.begin-closing');
+    Route::post('/companies/{company}/financial-years/{financialYear}/cancel-closing', [FinancialYearController::class, 'cancelClosing'])->name('companies.financial-years.cancel-closing');
     Route::post('/companies/{company}/financial-years/{financialYear}/close', [FinancialYearController::class, 'close'])->name('companies.financial-years.close');
     Route::post('/companies/{company}/financial-years/{financialYear}/reopen', [FinancialYearController::class, 'reopen'])->name('companies.financial-years.reopen');
+    Route::post('/companies/{company}/financial-years/{financialYear}/file', [FinancialYearController::class, 'markFiled'])->name('companies.financial-years.file');
     Route::post('/companies/{company}/financial-years/{financialYear}/periods/{period}/close', [FinancialYearController::class, 'closePeriod'])->name('companies.financial-years.periods.close');
     Route::post('/companies/{company}/financial-years/{financialYear}/periods/{period}/reopen', [FinancialYearController::class, 'reopenPeriod'])->name('companies.financial-years.periods.reopen');
     Route::get('/companies/{company}/prior-period-adjustments/create', [PriorPeriodAdjustmentController::class, 'create'])->name('companies.prior-adjustments.create');

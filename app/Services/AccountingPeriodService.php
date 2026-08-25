@@ -14,8 +14,15 @@ final class AccountingPeriodService
     public function close(AccountingPeriod $period, string $reason, User $user): AccountingPeriod
     {
         return DB::transaction(function () use ($period, $reason, $user) {
+            $year = $period->financialYear()->firstOrFail();
             if ($period->status !== 'open') {
                 throw ValidationException::withMessages(['period' => 'Only an open period can be closed.']);
+            }
+            if ($year->status !== 'open') {
+                throw ValidationException::withMessages(['period' => "Accounting Period {$period->name} cannot be closed while Financial Year {$year->name} is {$year->status}."]);
+            }
+            if ($period->ends_on->isAfter(today())) {
+                throw ValidationException::withMessages(['period' => "Accounting Period {$period->name} has not ended and cannot be closed."]);
             }
             $period->update(['status' => 'closed', 'locked_at' => now(), 'updated_by' => $user->id]);
             $this->audit->log('accounting_period.closed', $period, $period->company_id, $user->id, ['status' => 'open'], ['status' => 'closed', 'reason' => $reason]);

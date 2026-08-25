@@ -17,9 +17,8 @@ class FinancialYearController extends Controller
         $company = $this->entity($request, $company);
 
         $years = $company->financialYears()->with(['periods', 'taxYears'])->orderByDesc('starts_on')->get();
-        $currentYearId = $years->first(fn ($year) => today()->betweenIncluded($year->starts_on, $year->ends_on))?->id;
 
-        return view('companies.financial-years.index', compact('company', 'years', 'currentYearId'));
+        return view('companies.financial-years.index', compact('company', 'years'));
     }
 
     public function store(Request $request, Company $company, FinancialYearService $service)
@@ -56,6 +55,25 @@ class FinancialYearController extends Controller
         $service->reopen($financialYear, $request->validate(['reason' => 'required|string|min:10', 'confirmation' => 'required|in:REOPEN YEAR'])['reason'], $request->user());
 
         return back()->with('success', 'Financial Year reopened; periods remain individually controlled.');
+    }
+
+    public function cancelClosing(Request $request, Company $company, FinancialYear $financialYear, FinancialYearService $service)
+    {
+        $company = $this->entity($request, $company);
+        abort_unless($financialYear->company_id === $company->id, 404);
+        $service->cancelClosing($financialYear, $request->validate(['reason' => 'required|string|min:10', 'confirmation' => 'required|in:CANCEL CLOSING'])['reason'], $request->user());
+
+        return back()->with('success', 'Financial Year closing cancelled. Closed Accounting Periods remain closed.');
+    }
+
+    public function markFiled(Request $request, Company $company, FinancialYear $financialYear, FinancialYearService $service)
+    {
+        $company = $this->entity($request, $company);
+        abort_unless($financialYear->company_id === $company->id, 404);
+        $data = $request->validate(['reference' => 'required|string|max:255', 'confirmation' => 'required|in:MARK FILED']);
+        $service->markFiled($financialYear, $data['reference'], $request->user());
+
+        return back()->with('success', 'Financial Year marked Filed. Normal reopening is permanently blocked.');
     }
 
     public function closePeriod(Request $request, Company $company, FinancialYear $financialYear, AccountingPeriod $period, AccountingPeriodService $service)

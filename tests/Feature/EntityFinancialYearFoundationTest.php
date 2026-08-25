@@ -13,6 +13,7 @@ use App\Services\FinancialYearResolver;
 use App\Services\FinancialYearService;
 use App\Services\JournalService;
 use App\Services\PriorPeriodAdjustmentService;
+use Carbon\CarbonImmutable;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
@@ -65,6 +66,8 @@ class EntityFinancialYearFoundationTest extends TestCase
         $period = app(FinancialYearResolver::class)->resolve($this->company, '2026-04-15');
         $this->assertSame($year->id, $period->financial_year_id);
         $this->assertThrows(fn () => app(FinancialYearResolver::class)->resolve($this->company, '2035-01-01'), ValidationException::class);
+        $this->travelTo(CarbonImmutable::parse('2027-04-01'));
+        $year->periods()->update(['status' => 'closed']);
         app(FinancialYearService::class)->beginClosing($year, 'Approved annual close preparation', $this->user);
         app(FinancialYearService::class)->close($year->fresh(), 'Approved annual close', $this->user);
         $this->assertThrows(fn () => app(FinancialYearResolver::class)->resolve($this->company, '2026-04-15'), ValidationException::class);
@@ -74,6 +77,8 @@ class EntityFinancialYearFoundationTest extends TestCase
     {
         $year = $this->company->financialYears()->first();
         $service = app(FinancialYearService::class);
+        $this->travelTo(CarbonImmutable::parse('2027-04-01'));
+        $year->periods()->update(['status' => 'closed']);
         $service->beginClosing($year, 'Approved annual close preparation', $this->user);
         $service->close($year->fresh(), 'Approved annual close', $this->user);
         $service->reopen($year->fresh(), 'Correction authorised by owner', $this->user);
@@ -99,6 +104,8 @@ class EntityFinancialYearFoundationTest extends TestCase
     public function test_prior_period_adjustment_and_carry_forward_are_explicit_and_entity_scoped(): void
     {
         $origin = $this->company->financialYears()->first();
+        $this->travelTo(CarbonImmutable::parse('2027-04-01'));
+        $origin->periods()->update(['status' => 'closed']);
         app(FinancialYearService::class)->beginClosing($origin, 'Approved annual close preparation', $this->user);
         app(FinancialYearService::class)->close($origin->fresh(), 'Approved annual close', $this->user);
         $destination = app(FinancialYearService::class)->create($this->company, ['name' => '2027-2028', 'starts_on' => '2027-04-01', 'ends_on' => '2028-03-31'], $this->user);
@@ -168,6 +175,8 @@ class EntityFinancialYearFoundationTest extends TestCase
         $this->assertDatabaseHas('audit_logs', ['event' => 'accounting_period.reopened', 'auditable_id' => $period->id]);
         $years = app(FinancialYearService::class);
         $this->assertThrows(fn () => $years->close($year, 'Cannot skip Closing state', $this->user), ValidationException::class);
+        $this->travelTo(CarbonImmutable::parse('2027-04-01'));
+        $year->periods()->update(['status' => 'closed']);
         $years->beginClosing($year, 'Year end finalisation commenced', $this->user);
         $this->assertSame('closing', $year->fresh()->status);
         $this->assertThrows(fn () => app(FinancialYearResolver::class)->resolve($this->company, $period->starts_on->toDateString()), ValidationException::class);
@@ -184,6 +193,8 @@ class EntityFinancialYearFoundationTest extends TestCase
     {
         $origin = $this->company->financialYears()->first();
         $years = app(FinancialYearService::class);
+        $this->travelTo(CarbonImmutable::parse('2027-04-01'));
+        $origin->periods()->update(['status' => 'closed']);
         $years->beginClosing($origin, 'Year end finalisation commenced', $this->user);
         $years->close($origin->fresh(), 'Approved annual close', $this->user);
         $destination = $years->create($this->company, ['name' => '2027-2028', 'starts_on' => '2027-04-01', 'ends_on' => '2028-03-31'], $this->user);
@@ -192,6 +203,94 @@ class EntityFinancialYearFoundationTest extends TestCase
         $this->post(route('companies.prior-adjustments.store', $this->company), ['origin_financial_year_id' => $origin->id, 'adjustment_financial_year_id' => $destination->id, 'adjustment_type' => 'source_document_omission', 'reason' => 'Missed source document found after close', 'source_reference' => 'INV-LEGACY-42'])->assertRedirect();
         $this->assertDatabaseHas('prior_period_adjustments', ['company_id' => $this->company->id, 'origin_financial_year_id' => $origin->id, 'adjustment_financial_year_id' => $destination->id, 'source_reference' => 'INV-LEGACY-42', 'status' => 'draft']);
         $this->assertDatabaseHas('audit_logs', ['company_id' => $this->company->id, 'event' => 'prior_period_adjustment.created']);
+    }
+
+    public function test_date_positions_and_period_close_eligibility_are_derived_from_dates(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-08-26'));
+        $years = app(FinancialYearService::class);
+        $past = $years->create($this->company, ['name' => '2025-2026', 'starts_on' => '2025-04-01', 'ends_on' => '2026-03-31'], $this->user);
+        $current = $this->company->financialYears()->where('name', '2026-2027')->firstOrFail();
+        $future = $years->create($this->company, ['name' => '2027-2028', 'starts_on' => '2027-04-01', 'ends_on' => '2028-03-31'], $this->user);
+
+        $this->assertSame('past', $past->datePosition());
+        $this->assertSame('current', $current->datePosition());
+        $this->assertSame('future', $future->datePosition());
+        $this->assertSame('open', $future->status);
+        $page = $this->actingAs($this->user)->get(route('companies.financial-years.index', $this->company))->assertOk()
+            ->assertSee('Past Year')->assertSee('Current Year')->assertSee('Future Year')->assertSee('Not yet eligible');
+        $futureCard = collect(explode('<div class="card mb-4">', $page->getContent()))->first(fn (string $card) => str_contains($card, '2027-2028'));
+        $this->assertIsString($futureCard);
+        $this->assertStringNotContainsString('Close Period', $futureCard);
+        $this->assertStringNotContainsString('Begin Financial Year Closing', $futureCard);
+
+        $periods = app(AccountingPeriodService::class);
+        $endedPeriod = $current->periods()->whereDate('ends_on', '<', today())->firstOrFail();
+        $periods->close($endedPeriod, 'Completed month end controls', $this->user);
+        $this->assertSame('closed', $endedPeriod->fresh()->status);
+        $futurePeriod = $current->periods()->whereDate('ends_on', '>', today())->firstOrFail();
+        $this->assertThrows(fn () => $periods->close($futurePeriod, 'Attempted premature period close', $this->user), ValidationException::class);
+        $this->assertThrows(fn () => $periods->close($future->periods()->first(), 'Attempted future year period close', $this->user), ValidationException::class);
+        $this->assertThrows(fn () => $years->beginClosing($current, 'Attempted current year closing', $this->user), ValidationException::class);
+        $this->assertThrows(fn () => $years->beginClosing($future, 'Attempted future year closing', $this->user), ValidationException::class);
+
+        $future->update(['status' => 'closing']);
+        $future->periods()->update(['status' => 'closed']);
+        $this->assertThrows(fn () => $years->close($future->fresh(), 'Attempted future year final close', $this->user), ValidationException::class);
+        $future->update(['status' => 'closed']);
+        $this->assertThrows(fn () => $years->markFiled($future->fresh(), 'FUTURE-FILING', $this->user), ValidationException::class);
+    }
+
+    public function test_past_year_closing_can_be_cancelled_without_reopening_periods_and_filed_is_protected(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-08-26'));
+        $years = app(FinancialYearService::class);
+        $past = $years->create($this->company, ['name' => '2025-2026', 'starts_on' => '2025-04-01', 'ends_on' => '2026-03-31'], $this->user);
+        foreach ($past->periods as $period) {
+            app(AccountingPeriodService::class)->close($period, 'Completed period close review', $this->user);
+        }
+        $this->actingAs($this->user)->get(route('companies.financial-years.index', $this->company))
+            ->assertOk()->assertSee('Begin Financial Year Closing');
+
+        $years->beginClosing($past, 'Annual closing controls completed', $this->user);
+        $years->cancelClosing($past->fresh(), 'Financial year closing started accidentally.', $this->user);
+        $this->assertSame('open', $past->fresh()->status);
+        $this->assertFalse($past->periods()->where('status', '!=', 'closed')->exists());
+        $this->assertDatabaseHas('audit_logs', ['company_id' => $this->company->id, 'event' => 'financial_year.closing_cancelled']);
+
+        $years->beginClosing($past->fresh(), 'Annual closing restarted after review', $this->user);
+        $years->close($past->fresh(), 'Annual closing approved and completed', $this->user);
+        $this->assertSame('closed', $past->fresh()->status);
+        $years->markFiled($past->fresh(), 'ANNUAL-FILING-2026', $this->user);
+        $this->assertThrows(fn () => $years->reopen($past->fresh(), 'Attempted direct filed year reopen', $this->user), ValidationException::class);
+    }
+
+    public function test_sequential_close_period_order_and_forged_period_controls(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2027-04-15'));
+        $years = app(FinancialYearService::class);
+        $earlier = $years->create($this->company, ['name' => '2025-2026', 'starts_on' => '2025-04-01', 'ends_on' => '2026-03-31'], $this->user);
+        $later = $this->company->financialYears()->where('name', '2026-2027')->firstOrFail();
+        $next = $years->create($this->company, ['name' => '2027-2028', 'starts_on' => '2027-04-01', 'ends_on' => '2028-03-31'], $this->user);
+        $later->periods()->update(['status' => 'closed']);
+
+        $this->assertThrows(fn () => $years->beginClosing($later, 'Attempted leapfrog year closing', $this->user), ValidationException::class);
+        $earlier->periods()->update(['status' => 'closed']);
+        $years->beginClosing($earlier, 'Earlier annual close commenced', $this->user);
+        $years->close($earlier->fresh(), 'Earlier annual close completed', $this->user);
+        $years->beginClosing($later->fresh(), 'Later annual close commenced', $this->user);
+        $this->assertSame($next->id, app(FinancialYearResolver::class)->resolve($this->company, '2027-04-15')->financial_year_id);
+
+        $periods = $later->periods()->get();
+        $this->assertSame($periods->pluck('starts_on')->map->toDateString()->sort()->values()->all(), $periods->pluck('starts_on')->map->toDateString()->values()->all());
+
+        $other = $this->entity('company', 'Forged Period Entity');
+        $foreignPeriod = $other->financialYears()->first()->periods()->first();
+        $this->actingAs($this->user)->post(route('companies.financial-years.periods.close', [$this->company, $later, $foreignPeriod]), [
+            'reason' => 'Forged cross-entity period request',
+            'confirmation' => 'CLOSE PERIOD',
+        ])->assertNotFound();
+        $this->assertSame('open', $foreignPeriod->fresh()->status);
     }
 
     private function entity(string $type, string $name): Company

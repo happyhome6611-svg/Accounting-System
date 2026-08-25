@@ -38,9 +38,11 @@ final class FinancialYearService
         if ($year->status !== 'closing') {
             throw ValidationException::withMessages(['status' => 'A Financial Year must enter Closing before it can be Closed.']);
         }
+        $this->ensureEnded($year);
+        $this->ensureAllPeriodsClosed($year);
+        $this->ensureEarlierYearsComplete($year);
 
         return DB::transaction(function () use ($year, $reason, $user) {
-            $year->periods()->where('status', 'open')->update(['status' => 'closed', 'locked_at' => now(), 'updated_by' => $user->id]);
             $year->update(['status' => 'closed', 'closed_at' => now(), 'closed_by' => $user->id, 'updated_by' => $user->id]);
             $this->audit->log('financial_year.closed', $year, $year->company_id, $user->id, ['status' => 'closing'], ['status' => 'closed', 'reason' => $reason]);
 
@@ -53,10 +55,27 @@ final class FinancialYearService
         if ($year->status !== 'open') {
             throw ValidationException::withMessages(['status' => 'Only an open Financial Year can enter Closing.']);
         }
+        $this->ensureEnded($year);
+        $this->ensureAllPeriodsClosed($year);
+        $this->ensureEarlierYearsComplete($year);
 
         return DB::transaction(function () use ($year, $reason, $user) {
             $year->update(['status' => 'closing', 'updated_by' => $user->id]);
             $this->audit->log('financial_year.closing', $year, $year->company_id, $user->id, ['status' => 'open'], ['status' => 'closing', 'reason' => $reason]);
+
+            return $year;
+        });
+    }
+
+    public function cancelClosing(FinancialYear $year, string $reason, User $user): FinancialYear
+    {
+        if ($year->status !== 'closing') {
+            throw ValidationException::withMessages(['status' => 'Only a Financial Year in Closing can have closing cancelled.']);
+        }
+
+        return DB::transaction(function () use ($year, $reason, $user) {
+            $year->update(['status' => 'open', 'reopened_at' => now(), 'reopened_by' => $user->id, 'updated_by' => $user->id]);
+            $this->audit->log('financial_year.closing_cancelled', $year, $year->company_id, $user->id, ['status' => 'closing'], ['status' => 'open', 'reason' => $reason]);
 
             return $year;
         });
@@ -81,6 +100,8 @@ final class FinancialYearService
         if ($year->status !== 'closed') {
             throw ValidationException::withMessages(['status' => 'Only a closed Financial Year can be marked Filed.']);
         }
+        $this->ensureEnded($year);
+        $this->ensureEarlierYearsComplete($year);
 
         return DB::transaction(function () use ($year, $reference, $user) {
             $year->update(['status' => 'filed', 'filed_at' => now(), 'filed_by' => $user->id, 'updated_by' => $user->id]);
@@ -88,5 +109,33 @@ final class FinancialYearService
 
             return $year;
         });
+    }
+
+    private function ensureEnded(FinancialYear $year): void
+    {
+        if (! $year->ends_on->isBefore(today())) {
+            throw ValidationException::withMessages(['status' => "Financial Year {$year->name} has not ended and cannot enter closing."]);
+        }
+    }
+
+    private function ensureAllPeriodsClosed(FinancialYear $year): void
+    {
+        if ($year->periods()->where('status', '!=', 'closed')->exists()) {
+            throw ValidationException::withMessages(['periods' => 'All accounting periods must be closed before Financial Year closing can begin.']);
+        }
+    }
+
+    private function ensureEarlierYearsComplete(FinancialYear $year): void
+    {
+        $unfinishedEarlierYear = FinancialYear::query()
+            ->where('company_id', $year->company_id)
+            ->whereDate('ends_on', '<', $year->starts_on)
+            ->whereNotIn('status', ['closed', 'filed'])
+            ->orderBy('starts_on')
+            ->first();
+
+        if ($unfinishedEarlierYear) {
+            throw ValidationException::withMessages(['status' => "Earlier Financial Year {$unfinishedEarlierYear->name} must be Closed before {$year->name} can proceed."]);
+        }
     }
 }
