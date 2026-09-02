@@ -9,16 +9,26 @@ use App\Models\Currency;
 use App\Services\CompanyCreator;
 use App\Services\CompanyDeletionService;
 use App\Services\CompanyMaintenanceService;
+use App\Services\CountryJurisdictionService;
 use Illuminate\Http\Request;
 
 class CompanyController extends Controller
 {
-    public function index(CompanyDeletionService $deletion)
+    public function index(CountryJurisdictionService $jurisdictions)
     {
-        $companies = auth()->user()->companies()->with(['country', 'baseCurrency', 'financialYears' => fn ($q) => $q->where('is_current', true)])->get();
+        $countries = $jurisdictions->countriesFor(auth()->user());
+        $countries->each(fn ($country) => $country->setAttribute('default_currency_code', $jurisdictions->defaultCurrencyCode($country)));
+
+        return view('companies.jurisdictions', compact('countries'));
+    }
+
+    public function country(string $country, CountryJurisdictionService $jurisdictions, CompanyDeletionService $deletion)
+    {
+        $country = $jurisdictions->country($country);
+        $companies = auth()->user()->companies()->where('country_id', $country->id)->with(['country', 'baseCurrency', 'financialYears' => fn ($q) => $q->where('is_current', true)])->get();
         $deletable = $companies->mapWithKeys(fn ($company) => [$company->id => $company->pivot->role === 'owner' && $deletion->isEligible($company)]);
 
-        return view('companies.index', compact('companies', 'deletable'));
+        return view('companies.index', compact('country', 'companies', 'deletable'));
     }
 
     public function create()
@@ -26,8 +36,26 @@ class CompanyController extends Controller
         return view('companies.create', ['countries' => Country::where('is_active', true)->orderBy('name')->get(), 'currencies' => Currency::where('is_active', true)->orderBy('code')->get()]);
     }
 
+    public function createInCountry(string $country, CountryJurisdictionService $jurisdictions)
+    {
+        $country = $jurisdictions->country($country);
+        $currencies = Currency::where('is_active', true)->orderBy('code')->get();
+        $defaultCurrencyCode = $jurisdictions->defaultCurrencyCode($country);
+
+        return view('companies.create', compact('country', 'currencies', 'defaultCurrencyCode'));
+    }
+
     public function store(StoreCompanyRequest $request, CompanyCreator $creator)
     {
+        $company = $creator->create($request->validated(), $request->user());
+
+        return redirect()->route('companies.show', $company);
+    }
+
+    public function storeInCountry(StoreCompanyRequest $request, string $country, CountryJurisdictionService $jurisdictions, CompanyCreator $creator)
+    {
+        $country = $jurisdictions->country($country);
+        abort_unless((int) $request->validated('country_id') === $country->id, 422, 'The accounting entity country must match the active jurisdiction.');
         $company = $creator->create($request->validated(), $request->user());
 
         return redirect()->route('companies.show', $company);

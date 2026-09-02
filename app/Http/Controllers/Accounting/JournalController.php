@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Accounting;
 use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\JournalEntry;
+use App\Services\CountryJurisdictionService;
 use App\Services\JournalService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -16,12 +17,16 @@ class JournalController extends Controller
         return $r->user()->companies()->findOrFail($r->integer('company_id') ?: $r->route('company'));
     }
 
-    public function index(Request $r)
+    public function index(Request $r, CountryJurisdictionService $jurisdictions)
     {
-        $companies = $r->user()->companies()->where('entity_type', '!=', 'individual')->get();
+        $countries = $jurisdictions->countriesFor($r->user(), false);
+        $country = $r->filled('country_id') ? $jurisdictions->country($r->integer('country_id')) : $countries->first();
+        abort_if($country && ! $countries->contains('id', $country->id), 404);
+        $companies = $country ? $r->user()->companies()->where('country_id', $country->id)->where('entity_type', '!=', 'individual')->get() : collect();
         $company = $r->company_id ? $this->company($r) : $companies->first();
+        abort_if($company && $country && $company->country_id !== $country->id, 404);
 
-        return view('accounting.index', ['companies' => $companies, 'company' => $company, 'journals' => $company?->journals()->latest()->get() ?? collect()]);
+        return view('accounting.index', ['countries' => $countries, 'country' => $country, 'companies' => $companies, 'company' => $company, 'journals' => $company?->journals()->latest()->get() ?? collect()]);
     }
 
     public function create(Request $r)

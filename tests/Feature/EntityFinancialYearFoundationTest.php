@@ -135,7 +135,7 @@ class EntityFinancialYearFoundationTest extends TestCase
         $individual = $this->entity('individual', 'Navigation Individual');
         $trader = $this->entity('sole_trader', 'Navigation Trader');
 
-        $response = $this->actingAs($this->user)->get(route('companies.index'))->assertOk();
+        $response = $this->actingAs($this->user)->get(route('companies.country', 'NZ'))->assertOk();
         $html = $response->getContent();
 
         $this->assertSame(3, substr_count($html, '>Manage Financial Years</a>'));

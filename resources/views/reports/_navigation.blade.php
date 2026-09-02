@@ -9,6 +9,7 @@
 
 <div class="card bg-light p-3 mb-4">
     <div class="row g-2">
+        <div class="col-md-6 col-xl-3"><strong>Country:</strong> {{ $countryLabel }}</div>
         <div class="col-md-6 col-xl-3"><strong>Accounting Entity:</strong> {{ $c->entity_label }}</div>
         <div class="col-md-6 col-xl-3"><strong>Branch:</strong> {{ $branchLabel }}</div>
         <div class="col-md-6 col-xl-3"><strong>Financial Year:</strong> {{ $financialYearLabel }}</div>

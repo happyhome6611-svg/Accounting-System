@@ -25,6 +25,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
     Route::resource('companies', CompanyController::class)->only(['index', 'create', 'store', 'show', 'edit', 'update']);
+    Route::get('/accounting-entities/country/{country}', [CompanyController::class, 'country'])->name('companies.country');
+    Route::get('/accounting-entities/country/{country}/create', [CompanyController::class, 'createInCountry'])->name('companies.country.create');
+    Route::post('/accounting-entities/country/{country}', [CompanyController::class, 'storeInCountry'])->name('companies.country.store');
     Route::patch('/companies/{company}/status', [CompanyController::class, 'status'])->name('companies.status');
     Route::get('/companies/{company}/delete', [CompanyController::class, 'confirmDelete'])->name('companies.delete');
     Route::delete('/companies/{company}', [CompanyController::class, 'destroy'])->name('companies.destroy');

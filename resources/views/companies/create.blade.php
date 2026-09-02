@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('content')
-<h1>Create Accounting Entity</h1>
-<div class="card p-4"><form method="post" action="{{ route('companies.store') }}">@csrf
+<h1>Create Accounting Entity{{ isset($country) ? ' — '.$country->name : '' }}</h1>
+<div class="card p-4"><form method="post" action="{{ isset($country) ? route('companies.country.store', $country->code) : route('companies.store') }}">@csrf
 <div class="row g-3">
 <div class="col-md-6"><label class="form-label">Entity type</label><select class="form-select" name="entity_type" id="entity-type" required><option value="company">Company</option><option value="individual">Individual</option><option value="sole_trader">Sole Trader</option></select></div>
 <div class="col-md-6 entity-company"><label class="form-label">Company name</label><input class="form-control" name="name" value="{{ old('name') }}" required></div>
@@ -9,8 +9,8 @@
 <div class="col-md-6 entity-person d-none"><label class="form-label">Individual name</label><input class="form-control" name="individual_name" value="{{ old('individual_name') }}"></div>
 <div class="col-md-6 entity-trader d-none"><label class="form-label">Trading name</label><input class="form-control" name="trading_name" value="{{ old('trading_name') }}"></div>
 <div class="col-md-6"><label class="form-label">Timezone</label><input class="form-control" name="timezone" value="{{ old('timezone','Pacific/Auckland') }}" required></div>
-<div class="col-md-6"><label class="form-label">Country</label><select class="form-select" name="country_id" required>@foreach($countries as $country)<option value="{{ $country->id }}">{{ $country->name }}</option>@endforeach</select></div>
-<div class="col-md-6"><label class="form-label">Base / tax currency</label><select class="form-select" name="base_currency_id" required>@foreach($currencies as $currency)<option value="{{ $currency->id }}">{{ $currency->code }} — {{ $currency->name }}</option>@endforeach</select></div>
+@if(isset($country))<div class="col-md-6"><label class="form-label">Country / Tax Jurisdiction</label><div class="form-control bg-light">{{ $country->name }}</div><input type="hidden" name="country_id" value="{{ $country->id }}"></div>@else<div class="col-md-6"><label class="form-label">Country</label><select class="form-select" name="country_id" required>@foreach($countries as $countryOption)<option value="{{ $countryOption->id }}">{{ $countryOption->name }}</option>@endforeach</select></div>@endif
+<div class="col-md-6"><label class="form-label">Base / tax currency</label><select class="form-select" name="base_currency_id" required>@foreach($currencies as $currency)<option value="{{ $currency->id }}" @selected(old('base_currency_id')==$currency->id || (!old('base_currency_id') && isset($defaultCurrencyCode) && $currency->code===$defaultCurrencyCode))>{{ $currency->code }} — {{ $currency->name }}</option>@endforeach</select></div>
 <div class="col-md-3"><label class="form-label">Financial year starts</label><input class="form-control" type="date" name="financial_year_start" required></div><div class="col-md-3"><label class="form-label">Financial year ends</label><input class="form-control" type="date" name="financial_year_end" required></div>
 </div><button class="btn btn-primary mt-4">Create Accounting Entity</button></form></div>
 <script>const type=document.querySelector('#entity-type');function entityFields(){const individual=type.value==='individual',trader=type.value==='sole_trader';document.querySelectorAll('.entity-company').forEach(element=>element.classList.toggle('d-none',individual||trader));document.querySelectorAll('.entity-person').forEach(element=>element.classList.toggle('d-none',!individual&&!trader));document.querySelectorAll('.entity-trader').forEach(element=>element.classList.toggle('d-none',!trader));document.querySelector('[name="name"]').required=!individual&&!trader;document.querySelector('[name="individual_name"]').required=individual||trader;document.querySelector('[name="trading_name"]').required=trader}type.addEventListener('change',entityFields);entityFields()</script>

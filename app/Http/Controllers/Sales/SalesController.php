@@ -11,6 +11,7 @@ use App\Models\SalesCreditNote;
 use App\Models\SalesInvoice;
 use App\Models\SalesOrder;
 use App\Models\SalesQuotation;
+use App\Services\CountryJurisdictionService;
 use App\Services\CustomerMaintenanceService;
 use App\Services\ItemMaintenanceService;
 use App\Services\MoneyFormatter;
@@ -25,9 +26,13 @@ class SalesController extends Controller
         return $r->user()->companies()->findOrFail($company->id);
     }
 
-    public function index(Request $r)
+    public function index(Request $r, CountryJurisdictionService $jurisdictions)
     {
-        return view('sales.index', ['companies' => $r->user()->companies()->where('entity_type', '!=', 'individual')->get()]);
+        $countries = $jurisdictions->countriesFor($r->user(), false);
+        $country = $r->filled('country_id') ? $jurisdictions->country($r->integer('country_id')) : $countries->first();
+        abort_if($country && ! $countries->contains('id', $country->id), 404);
+
+        return view('sales.index', ['countries' => $countries, 'country' => $country, 'companies' => $country ? $jurisdictions->entities($r->user(), $country, true) : collect()]);
     }
 
     public function customers(Request $r, Company $company, CustomerMaintenanceService $maintenance, MoneyFormatter $money)

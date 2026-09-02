@@ -2,18 +2,24 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\CountryJurisdictionService;
 use App\Services\DashboardService;
 use App\Services\MoneyFormatter;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request, DashboardService $dashboard, MoneyFormatter $money)
+    public function __invoke(Request $request, DashboardService $dashboard, MoneyFormatter $money, CountryJurisdictionService $jurisdictions)
     {
-        $companies = $request->user()->companies()->with('baseCurrency')->orderBy('name')->get();
-        $company = $request->filled('company_id') ? $request->user()->companies()->with('baseCurrency')->findOrFail($request->integer('company_id')) : $companies->first();
+        $countries = $jurisdictions->countriesFor($request->user(), false);
+        $country = $request->filled('country_id') ? $jurisdictions->country($request->integer('country_id')) : $countries->first();
+        if ($country && ! $countries->contains('id', $country->id)) {
+            abort(404);
+        }
+        $companies = $country ? $request->user()->companies()->where('country_id', $country->id)->with('baseCurrency')->orderBy('name')->get() : collect();
+        $company = $request->filled('company_id') && $country ? $jurisdictions->entity($request->user(), $country, $request->integer('company_id'))->load('baseCurrency') : $companies->first();
         if (! $company) {
-            return view('dashboard.index', compact('companies', 'company', 'money'));
+            return view('dashboard.index', compact('countries', 'country', 'companies', 'company', 'money'));
         }
         $supportsBranches = $company->supportsBranches();
         $branches = $supportsBranches ? $company->branches()->where('is_active', true)->orderByDesc('is_main_branch')->get() : collect();
@@ -23,6 +29,6 @@ class DashboardController extends Controller
         $metrics = $financialYear ? $dashboard->metrics($company, $branchId, $financialYear->id) : $dashboard->emptyMetrics();
         $period = $financialYear?->periods()->whereDate('starts_on', '<=', today())->whereDate('ends_on', '>=', today())->first();
 
-        return view('dashboard.index', compact('companies', 'company', 'supportsBranches', 'branches', 'branchId', 'metrics', 'financialYears', 'financialYear', 'period', 'money'));
+        return view('dashboard.index', compact('countries', 'country', 'companies', 'company', 'supportsBranches', 'branches', 'branchId', 'metrics', 'financialYears', 'financialYear', 'period', 'money'));
     }
 }
