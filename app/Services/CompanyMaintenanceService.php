@@ -20,9 +20,7 @@ final class CompanyMaintenanceService
             if (! $this->activity->isUnused($locked)) {
                 foreach (['country_id', 'base_currency_id'] as $field) {
                     if ((int) $data[$field] !== (int) $locked->{$field}) {
-                        $message = $field === 'country_id'
-                            ? 'Country / Tax Jurisdiction cannot be changed after accounting or business activity exists.'
-                            : 'This accounting-critical setting cannot be changed after business or accounting activity exists.';
+                        $message = 'Country / Tax Jurisdiction and Base Currency cannot be changed after accounting or business activity exists.';
                         throw ValidationException::withMessages([$field => $message]);
                     }
                 }

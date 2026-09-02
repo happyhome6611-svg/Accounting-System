@@ -110,13 +110,32 @@ class CountryJurisdictionFoundationTest extends TestCase
     {
         $period = $this->nzCompany->financialYears()->firstOrFail()->periods()->firstOrFail();
         $accounts = $this->nzCompany->accounts;
-        app(JournalService::class)->create($this->nzCompany, ['financial_year_id' => $period->financial_year_id, 'accounting_period_id' => $period->id, 'transaction_date' => $period->starts_on->toDateString(), 'description' => 'Meaningful activity', 'lines' => [['account_id' => $accounts[0]->id, 'debit' => 1, 'credit' => 0], ['account_id' => $accounts[4]->id, 'debit' => 0, 'credit' => 1]]], $this->user);
+        $journal = app(JournalService::class)->create($this->nzCompany, ['financial_year_id' => $period->financial_year_id, 'accounting_period_id' => $period->id, 'transaction_date' => $period->starts_on->toDateString(), 'description' => 'Meaningful activity', 'lines' => [['account_id' => $accounts[0]->id, 'debit' => 1, 'credit' => 0], ['account_id' => $accounts[4]->id, 'debit' => 0, 'credit' => 1]]], $this->user);
+        $historicalAmounts = $journal->lines()->orderBy('id')->get(['debit', 'credit'])->toArray();
         $inr = Currency::where('code', 'INR')->firstOrFail();
         $payload = ['name' => $this->nzCompany->name, 'legal_name' => $this->nzCompany->legal_name, 'country_id' => $this->india->id, 'base_currency_id' => $inr->id, 'timezone' => 'Asia/Kolkata', 'address' => null, 'email' => null, 'phone' => null];
 
-        $this->actingAs($this->user)->get(route('companies.edit', $this->nzCompany))->assertOk()->assertSee('Country / Tax Jurisdiction cannot be changed after accounting or business activity exists.')->assertSee('disabled', false);
+        $edit = $this->actingAs($this->user)->get(route('companies.edit', $this->nzCompany))->assertOk()->assertSee('Country / Tax Jurisdiction and Base Currency cannot be changed after accounting or business activity exists.');
+        $this->assertSame(2, substr_count($edit->getContent(), 'disabled'));
         $this->put(route('companies.update', $this->nzCompany), $payload)->assertSessionHasErrors('country_id');
         $this->assertSame($this->nz->id, $this->nzCompany->fresh()->country_id);
+        $this->put(route('companies.update', $this->nzCompany), [...$payload, 'country_id' => $this->nz->id])->assertSessionHasErrors('base_currency_id');
+        $this->assertSame('NZD', $this->nzCompany->fresh()->baseCurrency->code);
+        $this->assertSame($historicalAmounts, $journal->lines()->orderBy('id')->get(['debit', 'credit'])->toArray());
+
+        $safeProfile = [...$payload, 'name' => 'Renamed Used Entity', 'legal_name' => 'Renamed Used Entity Ltd', 'country_id' => $this->nz->id, 'base_currency_id' => $this->nzCompany->base_currency_id, 'timezone' => 'Pacific/Auckland'];
+        $this->put(route('companies.update', $this->nzCompany), $safeProfile)->assertRedirect();
+        $this->assertSame('Renamed Used Entity', $this->nzCompany->fresh()->name);
+        $this->assertSame($historicalAmounts, $journal->lines()->orderBy('id')->get(['debit', 'credit'])->toArray());
+    }
+
+    public function test_unused_entity_can_change_base_currency_without_changing_country(): void
+    {
+        $usd = Currency::where('code', 'USD')->firstOrFail();
+        $payload = ['name' => $this->nzCompany->name, 'legal_name' => $this->nzCompany->legal_name, 'country_id' => $this->nz->id, 'base_currency_id' => $usd->id, 'timezone' => 'Pacific/Auckland', 'address' => null, 'email' => null, 'phone' => null];
+
+        $this->actingAs($this->user)->put(route('companies.update', $this->nzCompany), $payload)->assertRedirect();
+        $this->assertSame('USD', $this->nzCompany->fresh()->baseCurrency->code);
     }
 
     public function test_sole_trader_keeps_branches_and_individual_remains_branchless(): void
