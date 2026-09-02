@@ -1,1 +1,27 @@
-@extends('layouts.app') @section('title','Sign in | Accounting Pro') @section('content')<div class="row justify-content-center mt-5"><div class="col-md-5"><div class="card p-4"><h2>Welcome back</h2><p class="text-muted">Sign in to Accounting Pro</p><form method="post">@csrf<div class="mb-3"><label class="form-label">Email</label><input class="form-control" type="email" name="email" value="{{ old('email') }}" required autofocus></div><div class="mb-3"><label class="form-label">Password</label><input class="form-control" type="password" name="password" required></div><button class="btn btn-primary w-100">Sign in</button></form><a class="mt-3" href="{{ route('register') }}">Create an account</a></div></div></div>@endsection
+@extends('layouts.app')
+
+@section('title', 'Sign in | '.config('app.name'))
+
+@section('content')
+    <div class="row justify-content-center mt-5">
+        <div class="col-md-5">
+            <div class="card p-4">
+                <h2>Welcome back</h2>
+                <p class="text-muted">Sign in to {{ config('app.name') }}</p>
+                <form method="post">
+                    @csrf
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input class="form-control" type="email" name="email" value="{{ old('email') }}" required autofocus>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <input class="form-control" type="password" name="password" required>
+                    </div>
+                    <button class="btn btn-primary w-100">Sign in</button>
+                </form>
+                <a class="mt-3" href="{{ route('register') }}">Create an account</a>
+            </div>
+        </div>
+    </div>
+@endsection

@@ -1,0 +1,1 @@
+@extends('layouts.app') @section('content')<h1>AR Aging — {{$c->name}}</h1><table class="table"><tr>@foreach($report['totals'] as $bucket=>$amount)<th>{{$bucket}}</th>@endforeach</tr><tr>@foreach($report['totals'] as $amount)<td>{{$amount}}</td>@endforeach</tr></table>@endsection

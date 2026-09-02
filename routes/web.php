@@ -1,8 +1,17 @@
 <?php
 
+use App\Http\Controllers\Accounting\JournalController;
+use App\Http\Controllers\Accounting\ReportController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RegisteredUserController;
+use App\Http\Controllers\Company\BranchController;
 use App\Http\Controllers\Company\CompanyController;
+use App\Http\Controllers\Company\FinancialYearController;
+use App\Http\Controllers\Company\PriorPeriodAdjustmentController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Sales\ReceivablesController;
+use App\Http\Controllers\Sales\SalesController;
+use App\Http\Controllers\Sales\SalesTransactionController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
@@ -13,10 +22,81 @@ Route::middleware('guest')->group(function () {
     Route::post('/register', [RegisteredUserController::class, 'store']);
 });
 Route::middleware('auth')->group(function () {
-    Route::get('/dashboard', fn () => view('dashboard.index', ['companies' => auth()->user()->companies()->count()]))->name('dashboard');
+    Route::get('/dashboard', DashboardController::class)->name('dashboard');
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
-    Route::resource('companies', CompanyController::class)->only(['index', 'create', 'store', 'show']);
-    foreach (['accounting', 'sales', 'purchases', 'banking', 'tax', 'reports', 'settings'] as $module) {
+    Route::resource('companies', CompanyController::class)->only(['index', 'create', 'store', 'show', 'edit', 'update']);
+    Route::get('/accounting-entities/country/{country}', [CompanyController::class, 'country'])->name('companies.country');
+    Route::get('/accounting-entities/country/{country}/create', [CompanyController::class, 'createInCountry'])->name('companies.country.create');
+    Route::post('/accounting-entities/country/{country}', [CompanyController::class, 'storeInCountry'])->name('companies.country.store');
+    Route::patch('/companies/{company}/status', [CompanyController::class, 'status'])->name('companies.status');
+    Route::get('/companies/{company}/delete', [CompanyController::class, 'confirmDelete'])->name('companies.delete');
+    Route::delete('/companies/{company}', [CompanyController::class, 'destroy'])->name('companies.destroy');
+    Route::get('/companies/{company}/financial-years', [FinancialYearController::class, 'index'])->name('companies.financial-years.index');
+    Route::post('/companies/{company}/financial-years', [FinancialYearController::class, 'store'])->name('companies.financial-years.store');
+    Route::post('/companies/{company}/financial-years/{financialYear}/begin-closing', [FinancialYearController::class, 'beginClosing'])->name('companies.financial-years.begin-closing');
+    Route::post('/companies/{company}/financial-years/{financialYear}/cancel-closing', [FinancialYearController::class, 'cancelClosing'])->name('companies.financial-years.cancel-closing');
+    Route::post('/companies/{company}/financial-years/{financialYear}/close', [FinancialYearController::class, 'close'])->name('companies.financial-years.close');
+    Route::post('/companies/{company}/financial-years/{financialYear}/reopen', [FinancialYearController::class, 'reopen'])->name('companies.financial-years.reopen');
+    Route::post('/companies/{company}/financial-years/{financialYear}/file', [FinancialYearController::class, 'markFiled'])->name('companies.financial-years.file');
+    Route::post('/companies/{company}/financial-years/{financialYear}/periods/{period}/close', [FinancialYearController::class, 'closePeriod'])->name('companies.financial-years.periods.close');
+    Route::post('/companies/{company}/financial-years/{financialYear}/periods/{period}/reopen', [FinancialYearController::class, 'reopenPeriod'])->name('companies.financial-years.periods.reopen');
+    Route::get('/companies/{company}/prior-period-adjustments/create', [PriorPeriodAdjustmentController::class, 'create'])->name('companies.prior-adjustments.create');
+    Route::post('/companies/{company}/prior-period-adjustments', [PriorPeriodAdjustmentController::class, 'store'])->name('companies.prior-adjustments.store');
+    Route::resource('/companies/{company}/branches', BranchController::class)->except(['show'])->names([
+        'index' => 'companies.branches.index',
+        'create' => 'companies.branches.create',
+        'store' => 'companies.branches.store',
+        'edit' => 'companies.branches.edit',
+        'update' => 'companies.branches.update',
+        'destroy' => 'companies.branches.destroy',
+    ]);
+    Route::patch('/companies/{company}/branches/{branch}/status', [BranchController::class, 'status'])->name('companies.branches.status');
+    Route::get('/accounting', [JournalController::class, 'index'])->name('accounting');
+    Route::get('/companies/{company}/journals/create', [JournalController::class, 'create'])->name('journals.create');
+    Route::post('/companies/{company}/journals', [JournalController::class, 'store'])->name('journals.store');
+    Route::get('/companies/{company}/journals/{journal}', [JournalController::class, 'show'])->name('journals.show');
+    Route::get('/companies/{company}/journals/{journal}/edit', [JournalController::class, 'edit'])->name('journals.edit');
+    Route::put('/companies/{company}/journals/{journal}', [JournalController::class, 'update'])->name('journals.update');
+    Route::delete('/companies/{company}/journals/{journal}', [JournalController::class, 'destroy'])->name('journals.destroy');
+    Route::post('/companies/{company}/journals/{journal}/post', [JournalController::class, 'post'])->name('journals.post');
+    Route::post('/companies/{company}/journals/{journal}/reverse', [JournalController::class, 'reverse'])->name('journals.reverse');
+    Route::get('/reports', [ReportController::class, 'index'])->name('reports');
+    Route::get('/reports/general-ledger', [ReportController::class, 'ledger'])->name('reports.ledger');
+    Route::get('/reports/trial-balance', [ReportController::class, 'trial'])->name('reports.trial');
+    Route::get('/reports/profit-loss', [ReportController::class, 'profitLoss'])->name('reports.profit-loss');
+    Route::get('/reports/balance-sheet', [ReportController::class, 'balanceSheet'])->name('reports.balance-sheet');
+    Route::get('/sales', [SalesController::class, 'index'])->name('sales');
+    Route::get('/companies/{company}/customers', [SalesController::class, 'customers'])->name('sales.customers');
+    Route::post('/companies/{company}/customers', [SalesController::class, 'storeCustomer'])->name('sales.customers.store');
+    Route::get('/companies/{company}/customers/{customer}/edit', [SalesController::class, 'editCustomer'])->name('sales.customers.edit');
+    Route::put('/companies/{company}/customers/{customer}', [SalesController::class, 'updateCustomer'])->name('sales.customers.update');
+    Route::patch('/companies/{company}/customers/{customer}/status', [SalesController::class, 'customerStatus'])->name('sales.customers.status');
+    Route::get('/companies/{company}/customers/{customer}/delete', [SalesController::class, 'confirmCustomerDelete'])->name('sales.customers.delete');
+    Route::delete('/companies/{company}/customers/{customer}', [SalesController::class, 'destroyCustomer'])->name('sales.customers.destroy');
+    Route::get('/companies/{company}/items', [SalesController::class, 'items'])->name('sales.items');
+    Route::post('/companies/{company}/items', [SalesController::class, 'storeItem'])->name('sales.items.store');
+    Route::get('/companies/{company}/items/{item}/edit', [SalesController::class, 'editItem'])->name('sales.items.edit');
+    Route::put('/companies/{company}/items/{item}', [SalesController::class, 'updateItem'])->name('sales.items.update');
+    Route::patch('/companies/{company}/items/{item}/status', [SalesController::class, 'itemStatus'])->name('sales.items.status');
+    Route::get('/companies/{company}/items/{item}/delete', [SalesController::class, 'confirmItemDelete'])->name('sales.items.delete');
+    Route::delete('/companies/{company}/items/{item}', [SalesController::class, 'destroyItem'])->name('sales.items.destroy');
+    Route::get('/companies/{company}/sales/{type}', [SalesTransactionController::class, 'index'])->name('sales.transactions.index');
+    Route::get('/companies/{company}/sales/{type}/create', [SalesTransactionController::class, 'create'])->name('sales.transactions.create');
+    Route::post('/companies/{company}/sales/{type}', [SalesTransactionController::class, 'store'])->name('sales.transactions.store');
+    Route::get('/companies/{company}/sales/{type}/{document}', [SalesTransactionController::class, 'show'])->whereNumber('document')->name('sales.transactions.show');
+    Route::get('/companies/{company}/sales/{type}/{document}/edit', [SalesTransactionController::class, 'edit'])->whereNumber('document')->name('sales.transactions.edit');
+    Route::put('/companies/{company}/sales/{type}/{document}', [SalesTransactionController::class, 'update'])->whereNumber('document')->name('sales.transactions.update');
+    Route::delete('/companies/{company}/sales/{type}/{document}', [SalesTransactionController::class, 'destroy'])->whereNumber('document')->name('sales.transactions.destroy');
+    Route::post('/companies/{company}/sales/{type}/{document}/post', [SalesTransactionController::class, 'post'])->whereNumber('document')->name('sales.transactions.post');
+    Route::post('/companies/{company}/quotations/{quotation}/convert', [SalesTransactionController::class, 'convertQuotation'])->name('sales.quotations.convert');
+    Route::post('/companies/{company}/orders/{order}/convert', [SalesTransactionController::class, 'convertOrder'])->name('sales.orders.convert');
+    Route::get('/companies/{company}/sales-invoices', [SalesTransactionController::class, 'invoicesIndex'])->name('sales.invoices');
+    Route::get('/companies/{company}/sales-documents/{type}', [SalesTransactionController::class, 'legacyIndex'])->name('sales.documents');
+    Route::post('/companies/{company}/sales-invoices/{invoice}/post', [SalesController::class, 'postInvoice'])->name('sales.invoices.post');
+    Route::get('/reports/accounts-receivable', [ReceivablesController::class, 'ar'])->name('reports.ar');
+    Route::get('/reports/ar-aging', [ReceivablesController::class, 'aging'])->name('reports.ar-aging');
+    Route::get('/reports/customer-statement', [ReceivablesController::class, 'statement'])->name('reports.customer-statement');
+    foreach (['purchases', 'banking', 'tax', 'settings'] as $module) {
         Route::view("/{$module}", 'coming-soon.index', ['module' => ucfirst($module)])->name($module);
     }
 });

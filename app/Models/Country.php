@@ -12,4 +12,9 @@ class Country extends Model
     {
         return ['is_active' => 'boolean'];
     }
+
+    public function companies()
+    {
+        return $this->hasMany(Company::class);
+    }
 }

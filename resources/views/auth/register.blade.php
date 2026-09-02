@@ -1,1 +1,31 @@
-@extends('layouts.app') @section('content')<div class="row justify-content-center mt-4"><div class="col-md-6"><div class="card p-4"><h2>Create your account</h2><form method="post">@csrf@foreach(['name'=>'Name','email'=>'Email'] as $name=>$label)<div class="mb-3"><label class="form-label">{{ $label }}</label><input class="form-control" name="{{ $name }}" value="{{ old($name) }}" required></div>@endforeach<div class="mb-3"><label>Password</label><input type="password" class="form-control" name="password" required></div><div class="mb-3"><label>Confirm password</label><input type="password" class="form-control" name="password_confirmation" required></div><button class="btn btn-primary">Register</button></form></div></div></div>@endsection
+@extends('layouts.app')
+
+@section('title', 'Register | '.config('app.name'))
+
+@section('content')
+    <div class="row justify-content-center mt-4">
+        <div class="col-md-6">
+            <div class="card p-4">
+                <h2>Create your account</h2>
+                <form method="post">
+                    @csrf
+                    @foreach (['name' => 'Name', 'email' => 'Email'] as $name => $label)
+                        <div class="mb-3">
+                            <label class="form-label">{{ $label }}</label>
+                            <input class="form-control" name="{{ $name }}" value="{{ old($name) }}" required>
+                        </div>
+                    @endforeach
+                    <div class="mb-3">
+                        <label>Password</label>
+                        <input type="password" class="form-control" name="password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label>Confirm password</label>
+                        <input type="password" class="form-control" name="password_confirmation" required>
+                    </div>
+                    <button class="btn btn-primary">Register</button>
+                </form>
+            </div>
+        </div>
+    </div>
+@endsection

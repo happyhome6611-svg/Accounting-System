@@ -9,11 +9,11 @@ class Company extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['name', 'legal_name', 'country_id', 'base_currency_id', 'timezone', 'accounting_configuration', 'tax_configuration', 'created_by', 'updated_by'];
+    protected $fillable = ['entity_type', 'name', 'legal_name', 'individual_name', 'trading_name', 'country_id', 'base_currency_id', 'timezone', 'address', 'email', 'phone', 'registration_identifiers', 'is_active', 'accounting_configuration', 'tax_configuration', 'created_by', 'updated_by'];
 
     protected function casts(): array
     {
-        return ['accounting_configuration' => 'array', 'tax_configuration' => 'array'];
+        return ['registration_identifiers' => 'array', 'is_active' => 'boolean', 'accounting_configuration' => 'array', 'tax_configuration' => 'array'];
     }
 
     public function country()
@@ -39,5 +39,49 @@ class Company extends Model
     public function accounts()
     {
         return $this->hasMany(Account::class);
+    }
+
+    public function journals()
+    {
+        return $this->hasMany(JournalEntry::class);
+    }
+
+    public function customers()
+    {
+        return $this->hasMany(Customer::class);
+    }
+
+    public function items()
+    {
+        return $this->hasMany(Item::class);
+    }
+
+    public function branches()
+    {
+        return $this->hasMany(Branch::class);
+    }
+
+    public function supportsBranches(): bool
+    {
+        return in_array($this->entity_type, ['company', 'sole_trader', 'partnership', 'trust', 'other'], true);
+    }
+
+    public function getEntityLabelAttribute(): string
+    {
+        return match ($this->entity_type) {
+            'individual' => $this->individual_name ?: $this->name,
+            'sole_trader' => $this->trading_name ?: $this->individual_name ?: $this->name,
+            default => $this->name,
+        };
+    }
+
+    public function taxYears()
+    {
+        return $this->hasMany(TaxYear::class);
+    }
+
+    public function salesInvoices()
+    {
+        return $this->hasMany(SalesInvoice::class);
     }
 }
