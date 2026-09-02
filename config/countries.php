@@ -12,4 +12,7 @@ return ['modules' => [
     'AU' => AustraliaModule::class,
     'GB' => UnitedKingdomModule::class,
     'SG' => SingaporeModule::class,
-], 'default_currencies' => ['IN' => 'INR', 'NZ' => 'NZD', 'AU' => 'AUD', 'GB' => 'GBP', 'SG' => 'SGD']];
+],
+    'default_currencies' => ['IN' => 'INR', 'NZ' => 'NZD', 'AU' => 'AUD', 'GB' => 'GBP', 'SG' => 'SGD'],
+    'default_timezones' => ['IN' => 'Asia/Kolkata', 'NZ' => 'Pacific/Auckland', 'AU' => 'Australia/Sydney', 'GB' => 'Europe/London', 'SG' => 'Asia/Singapore'],
+];

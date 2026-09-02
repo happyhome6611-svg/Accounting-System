@@ -8,6 +8,7 @@ use App\Models\Currency;
 use App\Models\User;
 use App\Services\CompanyCreator;
 use App\Services\CountryJurisdictionService;
+use App\Services\JournalService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -83,6 +84,51 @@ class CountryJurisdictionFoundationTest extends TestCase
     {
         $profile = app(CountryJurisdictionService::class)->taxProfile($this->nz, 'sole_trader', '2027-04-01');
         $this->assertSame(['country' => 'NZ', 'entity_type' => 'sole_trader', 'effective_date' => '2027-04-01', 'calculation_engine' => null], $profile);
+    }
+
+    public function test_country_creation_defaults_cover_supported_jurisdictions(): void
+    {
+        $expected = ['NZ' => ['Pacific/Auckland', 'NZD'], 'IN' => ['Asia/Kolkata', 'INR'], 'AU' => ['Australia/Sydney', 'AUD'], 'GB' => ['Europe/London', 'GBP'], 'SG' => ['Asia/Singapore', 'SGD']];
+        $this->actingAs($this->user);
+        foreach ($expected as $code => [$timezone, $currency]) {
+            $this->get(route('companies.country.create', $code))->assertOk()->assertSee('value="'.$timezone.'"', false)->assertSee('data-code="'.$currency.'"', false)->assertSee('selected', false);
+        }
+    }
+
+    public function test_unused_entity_can_change_country_and_generated_tax_year_follows(): void
+    {
+        $inr = Currency::where('code', 'INR')->firstOrFail();
+        $payload = ['name' => 'Moved Books', 'legal_name' => 'Moved Books Ltd', 'country_id' => $this->india->id, 'base_currency_id' => $inr->id, 'timezone' => 'Asia/Kolkata', 'address' => null, 'email' => null, 'phone' => null];
+
+        $this->actingAs($this->user)->get(route('companies.edit', $this->nzCompany))->assertOk()->assertSee('Changing jurisdiction will update the suggested timezone and base currency')->assertDontSee('disabled', false);
+        $this->put(route('companies.update', $this->nzCompany), $payload)->assertRedirect();
+        $this->assertDatabaseHas('companies', ['id' => $this->nzCompany->id, 'country_id' => $this->india->id, 'base_currency_id' => $inr->id, 'timezone' => 'Asia/Kolkata']);
+        $this->assertSame([$this->india->id], $this->nzCompany->taxYears()->pluck('country_id')->unique()->values()->all());
+    }
+
+    public function test_used_entity_country_is_locked_in_ui_and_forged_update_is_rejected(): void
+    {
+        $period = $this->nzCompany->financialYears()->firstOrFail()->periods()->firstOrFail();
+        $accounts = $this->nzCompany->accounts;
+        app(JournalService::class)->create($this->nzCompany, ['financial_year_id' => $period->financial_year_id, 'accounting_period_id' => $period->id, 'transaction_date' => $period->starts_on->toDateString(), 'description' => 'Meaningful activity', 'lines' => [['account_id' => $accounts[0]->id, 'debit' => 1, 'credit' => 0], ['account_id' => $accounts[4]->id, 'debit' => 0, 'credit' => 1]]], $this->user);
+        $inr = Currency::where('code', 'INR')->firstOrFail();
+        $payload = ['name' => $this->nzCompany->name, 'legal_name' => $this->nzCompany->legal_name, 'country_id' => $this->india->id, 'base_currency_id' => $inr->id, 'timezone' => 'Asia/Kolkata', 'address' => null, 'email' => null, 'phone' => null];
+
+        $this->actingAs($this->user)->get(route('companies.edit', $this->nzCompany))->assertOk()->assertSee('Country / Tax Jurisdiction cannot be changed after accounting or business activity exists.')->assertSee('disabled', false);
+        $this->put(route('companies.update', $this->nzCompany), $payload)->assertSessionHasErrors('country_id');
+        $this->assertSame($this->nz->id, $this->nzCompany->fresh()->country_id);
+    }
+
+    public function test_sole_trader_keeps_branches_and_individual_remains_branchless(): void
+    {
+        $trader = $this->entity($this->nz, 'sole_trader', 'NZ Trader');
+        $individual = $this->user->companies()->where('entity_type', 'individual')->firstOrFail();
+        $this->assertTrue($trader->supportsBranches());
+        $this->assertCount(1, $trader->branches);
+        $this->assertFalse($individual->supportsBranches());
+        $this->assertCount(0, $individual->branches);
+        $this->actingAs($this->user)->get(route('dashboard', ['country_id' => $this->nz->id, 'company_id' => $trader->id]))->assertOk()->assertSee('All branches (consolidated)');
+        $this->get(route('reports', ['country_id' => $this->nz->id]))->assertOk()->assertSee('NZ Trader');
     }
 
     private function entity(Country $country, string $type, string $name): Company

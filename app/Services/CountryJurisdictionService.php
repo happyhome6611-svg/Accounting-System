@@ -50,6 +50,19 @@ final class CountryJurisdictionService
         return config("countries.default_currencies.{$country->code}");
     }
 
+    public function defaultTimezone(Country $country): ?string
+    {
+        return config("countries.default_timezones.{$country->code}");
+    }
+
+    public function defaults(): array
+    {
+        return Country::query()->where('is_active', true)->get()->mapWithKeys(fn (Country $country) => [$country->id => [
+            'currency' => $this->defaultCurrencyCode($country),
+            'timezone' => $this->defaultTimezone($country),
+        ]])->all();
+    }
+
     public function taxProfile(Country $country, string $entityType, CarbonInterface|string $effectiveDate): array
     {
         return $this->modules->resolve($country->code)->taxProfileAt($entityType, $effectiveDate);

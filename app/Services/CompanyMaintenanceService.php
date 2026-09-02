@@ -9,25 +9,32 @@ use Illuminate\Validation\ValidationException;
 
 final class CompanyMaintenanceService
 {
-    public function __construct(private CompanyDeletionService $activity, private AuditLogger $audit) {}
+    public function __construct(private EntityActivityService $activity, private AuditLogger $audit) {}
 
     public function update(Company $company, array $data, User $user): Company
     {
         $this->owner($company, $user);
-        if (! $this->activity->isEligible($company)) {
-            foreach (['country_id', 'base_currency_id'] as $field) {
-                if ((int) $data[$field] !== (int) $company->{$field}) {
-                    throw ValidationException::withMessages([$field => 'This accounting-critical setting cannot be changed after business or accounting activity exists.']);
-                }
-            }
-        }
 
         return DB::transaction(function () use ($company, $data, $user) {
-            $old = $company->toArray();
-            $company->update([...$data, 'updated_by' => $user->id]);
-            $this->audit->log('company.updated', $company, $company->id, $user->id, $old, $company->fresh()->toArray());
+            $locked = Company::query()->lockForUpdate()->findOrFail($company->id);
+            if (! $this->activity->isUnused($locked)) {
+                foreach (['country_id', 'base_currency_id'] as $field) {
+                    if ((int) $data[$field] !== (int) $locked->{$field}) {
+                        $message = $field === 'country_id'
+                            ? 'Country / Tax Jurisdiction cannot be changed after accounting or business activity exists.'
+                            : 'This accounting-critical setting cannot be changed after business or accounting activity exists.';
+                        throw ValidationException::withMessages([$field => $message]);
+                    }
+                }
+            }
+            $old = $locked->toArray();
+            $locked->update([...$data, 'updated_by' => $user->id]);
+            if ((int) $old['country_id'] !== (int) $locked->country_id) {
+                $locked->taxYears()->update(['country_id' => $locked->country_id, 'updated_by' => $user->id]);
+            }
+            $this->audit->log('company.updated', $locked, $locked->id, $user->id, $old, $locked->fresh()->toArray());
 
-            return $company->fresh();
+            return $locked->fresh();
         });
     }
 

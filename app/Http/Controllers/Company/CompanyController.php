@@ -10,6 +10,7 @@ use App\Services\CompanyCreator;
 use App\Services\CompanyDeletionService;
 use App\Services\CompanyMaintenanceService;
 use App\Services\CountryJurisdictionService;
+use App\Services\EntityActivityService;
 use Illuminate\Http\Request;
 
 class CompanyController extends Controller
@@ -31,9 +32,9 @@ class CompanyController extends Controller
         return view('companies.index', compact('country', 'companies', 'deletable'));
     }
 
-    public function create()
+    public function create(CountryJurisdictionService $jurisdictions)
     {
-        return view('companies.create', ['countries' => Country::where('is_active', true)->orderBy('name')->get(), 'currencies' => Currency::where('is_active', true)->orderBy('code')->get()]);
+        return view('companies.create', ['countries' => Country::where('is_active', true)->orderBy('name')->get(), 'currencies' => Currency::where('is_active', true)->orderBy('code')->get(), 'jurisdictionDefaults' => $jurisdictions->defaults()]);
     }
 
     public function createInCountry(string $country, CountryJurisdictionService $jurisdictions)
@@ -41,8 +42,9 @@ class CompanyController extends Controller
         $country = $jurisdictions->country($country);
         $currencies = Currency::where('is_active', true)->orderBy('code')->get();
         $defaultCurrencyCode = $jurisdictions->defaultCurrencyCode($country);
+        $defaultTimezone = $jurisdictions->defaultTimezone($country);
 
-        return view('companies.create', compact('country', 'currencies', 'defaultCurrencyCode'));
+        return view('companies.create', compact('country', 'currencies', 'defaultCurrencyCode', 'defaultTimezone'));
     }
 
     public function store(StoreCompanyRequest $request, CompanyCreator $creator)
@@ -68,12 +70,12 @@ class CompanyController extends Controller
         return view('companies.show', compact('company'));
     }
 
-    public function edit(Request $request, int $company)
+    public function edit(Request $request, int $company, EntityActivityService $activity, CountryJurisdictionService $jurisdictions)
     {
         $company = $request->user()->companies()->findOrFail($company);
         abort_unless($company->pivot->role === 'owner', 403);
 
-        return view('companies.edit', compact('company') + ['countries' => Country::where('is_active', true)->get(), 'currencies' => Currency::where('is_active', true)->get()]);
+        return view('companies.edit', compact('company') + ['countries' => Country::where('is_active', true)->get(), 'currencies' => Currency::where('is_active', true)->get(), 'countryLocked' => ! $activity->isUnused($company), 'jurisdictionDefaults' => $jurisdictions->defaults()]);
     }
 
     public function update(Request $request, int $company, CompanyMaintenanceService $service)
