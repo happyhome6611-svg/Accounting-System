@@ -9,6 +9,7 @@ use App\Http\Controllers\Company\CompanyController;
 use App\Http\Controllers\Company\FinancialYearController;
 use App\Http\Controllers\Company\PriorPeriodAdjustmentController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Purchases\PurchasesController;
 use App\Http\Controllers\Sales\ReceivablesController;
 use App\Http\Controllers\Sales\SalesController;
 use App\Http\Controllers\Sales\SalesTransactionController;
@@ -96,7 +97,24 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/accounts-receivable', [ReceivablesController::class, 'ar'])->name('reports.ar');
     Route::get('/reports/ar-aging', [ReceivablesController::class, 'aging'])->name('reports.ar-aging');
     Route::get('/reports/customer-statement', [ReceivablesController::class, 'statement'])->name('reports.customer-statement');
-    foreach (['purchases', 'banking', 'tax', 'settings'] as $module) {
+    Route::get('/purchases', [PurchasesController::class, 'index'])->name('purchases');
+    Route::get('/companies/{company}/suppliers', [PurchasesController::class, 'suppliers'])->name('purchases.suppliers');
+    Route::post('/companies/{company}/suppliers', [PurchasesController::class, 'storeSupplier'])->name('purchases.suppliers.store');
+    Route::get('/companies/{company}/suppliers/{supplier}/edit', [PurchasesController::class, 'editSupplier'])->name('purchases.suppliers.edit');
+    Route::put('/companies/{company}/suppliers/{supplier}', [PurchasesController::class, 'updateSupplier'])->name('purchases.suppliers.update');
+    Route::patch('/companies/{company}/suppliers/{supplier}/status', [PurchasesController::class, 'supplierStatus'])->name('purchases.suppliers.status');
+    Route::delete('/companies/{company}/suppliers/{supplier}', [PurchasesController::class, 'deleteSupplier'])->name('purchases.suppliers.destroy');
+    Route::get('/companies/{company}/purchases/{type}', [PurchasesController::class, 'documents'])->name('purchases.documents');
+    Route::get('/companies/{company}/purchases/{type}/create', [PurchasesController::class, 'createDocument'])->name('purchases.documents.create');
+    Route::post('/companies/{company}/purchases/{type}', [PurchasesController::class, 'storeDocument'])->name('purchases.documents.store');
+    Route::get('/companies/{company}/purchases/{type}/{document}', [PurchasesController::class, 'showDocument'])->whereNumber('document')->name('purchases.documents.show');
+    Route::get('/companies/{company}/purchases/{type}/{document}/edit', [PurchasesController::class, 'editDocument'])->whereNumber('document')->name('purchases.documents.edit');
+    Route::put('/companies/{company}/purchases/{type}/{document}', [PurchasesController::class, 'updateDocument'])->whereNumber('document')->name('purchases.documents.update');
+    Route::delete('/companies/{company}/purchases/{type}/{document}', [PurchasesController::class, 'destroyDocument'])->whereNumber('document')->name('purchases.documents.destroy');
+    Route::post('/companies/{company}/purchases/{type}/{document}/post', [PurchasesController::class, 'postDocument'])->whereNumber('document')->name('purchases.documents.post');
+    Route::post('/companies/{company}/purchase-orders/{order}/convert', [PurchasesController::class, 'convertOrder'])->name('purchases.orders.convert');
+    Route::get('/reports/accounts-payable/{type}', [PurchasesController::class, 'report'])->name('purchases.reports');
+    foreach (['banking', 'tax', 'settings'] as $module) {
         Route::view("/{$module}", 'coming-soon.index', ['module' => ucfirst($module)])->name($module);
     }
 });

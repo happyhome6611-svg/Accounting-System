@@ -1,0 +1,1 @@
+@extends('layouts.app') @section('content')<h1>Edit Supplier</h1><div class="card p-4"><form method="post" action="{{route('purchases.suppliers.update',[$company,$supplier])}}" class="row g-3">@csrf @method('PUT') @include('purchases.supplier-fields')<div><button class="btn btn-primary">Save Supplier</button></div></form></div>@endsection

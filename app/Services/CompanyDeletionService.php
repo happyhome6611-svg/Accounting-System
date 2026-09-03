@@ -18,6 +18,11 @@ final class CompanyDeletionService
         'sales_invoices' => 'sales invoices',
         'sales_credit_notes' => 'sales credit notes',
         'customer_receipts' => 'customer receipts',
+        'suppliers' => 'suppliers',
+        'purchase_orders' => 'purchase orders',
+        'supplier_bills' => 'supplier bills',
+        'supplier_credits' => 'supplier credits',
+        'supplier_payments' => 'supplier payments',
     ];
 
     public function blockers(Company $company): array

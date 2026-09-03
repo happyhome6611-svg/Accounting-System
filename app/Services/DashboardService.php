@@ -19,6 +19,8 @@ final class DashboardService
         $monthStart = now()->startOfMonth()->toDateString();
         $monthEnd = now()->endOfMonth()->toDateString();
         $open = $scope($company->salesInvoices()->whereIn('status', ['posted', 'partially_paid']))->get();
+        $openBills = $scope($company->supplierBills()->whereIn('status', ['posted', 'partially_paid']))->get();
+        $payables = $openBills->reduce(fn ($sum, $bill) => bcadd($sum, $bill->amount_due, 4), '0.0000');
         $journalLines = DB::table('journal_lines as line')->join('journal_entries as journal', 'journal.id', '=', 'line.journal_entry_id')->join('accounts as account', 'account.id', '=', 'line.account_id')->where('journal.company_id', $company->id)->whereIn('journal.status', ['posted', 'reversed'])->when($branchId, fn ($q) => $q->where('journal.branch_id', $branchId))->when($financialYearId, fn ($q) => $q->where('journal.financial_year_id', $financialYearId));
         $cash = (clone $journalLines)->where('account.type', 'asset')->where(function ($query) {
             $query->where('account.code', 'like', '10%')->orWhere('account.name', 'like', '%Cash%')->orWhere('account.name', 'like', '%Bank%');
@@ -36,12 +38,12 @@ final class DashboardService
             ->merge($this->transactionActivity('sales_credit_notes', 'credit_note_date', 'credit_note_number', 'Credit note', 'total', $company->id, $branchId, $financialYearId, $branchNames))
             ->sortByDesc('date')->take(10);
 
-        return ['cash' => (string) $cash, 'receivables' => $receivables, 'sales' => $sales, 'expenses' => $expenses, 'profit' => $profit, 'open_invoices' => $open->count(), 'overdue_invoices' => $open->filter(fn ($invoice) => $invoice->due_date?->isPast() && bccomp($invoice->amount_due, '0', 4) > 0)->count(), 'activity' => $activity];
+        return ['cash' => (string) $cash, 'receivables' => $receivables, 'payables' => $payables, 'sales' => $sales, 'expenses' => $expenses, 'profit' => $profit, 'open_invoices' => $open->count(), 'overdue_invoices' => $open->filter(fn ($invoice) => $invoice->due_date?->isPast() && bccomp($invoice->amount_due, '0', 4) > 0)->count(), 'unpaid_bills' => $openBills->count(), 'overdue_bills' => $openBills->filter(fn ($bill) => $bill->due_date?->isPast() && bccomp($bill->amount_due, '0', 4) > 0)->count(), 'activity' => $activity];
     }
 
     public function emptyMetrics(): array
     {
-        return ['cash' => '0.0000', 'receivables' => '0.0000', 'sales' => '0.0000', 'expenses' => '0.0000', 'profit' => '0.0000', 'open_invoices' => 0, 'overdue_invoices' => 0, 'activity' => collect()];
+        return ['cash' => '0.0000', 'receivables' => '0.0000', 'payables' => '0.0000', 'sales' => '0.0000', 'expenses' => '0.0000', 'profit' => '0.0000', 'open_invoices' => 0, 'overdue_invoices' => 0, 'unpaid_bills' => 0, 'overdue_bills' => 0, 'activity' => collect()];
     }
 
     private function transactionActivity(string $table, string $date, string $reference, string $type, string $amount, int $companyId, ?int $branchId, ?int $financialYearId, $branchNames)

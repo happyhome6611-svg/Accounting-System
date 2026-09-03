@@ -10,7 +10,7 @@ use Illuminate\Validation\ValidationException;
 
 final class BranchService
 {
-    private const TRANSACTION_TABLES = ['journal_entries', 'sales_quotations', 'sales_orders', 'sales_invoices', 'sales_credit_notes', 'customer_receipts'];
+    private const TRANSACTION_TABLES = ['journal_entries', 'sales_quotations', 'sales_orders', 'sales_invoices', 'sales_credit_notes', 'customer_receipts', 'purchase_orders', 'supplier_bills', 'supplier_credits', 'supplier_payments'];
 
     public function __construct(private AuditLogger $audit) {}
 
