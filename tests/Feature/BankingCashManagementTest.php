@@ -106,7 +106,7 @@ class BankingCashManagementTest extends TestCase
     {
         $bank = $this->bank('Operating', 'bank', $this->company->accounts()->where('code', '1000')->value('id'));
         $this->actingAs($this->user)->get(route('banking'))->assertOk()->assertSee('Banking & Cash Management', false);
-        foreach ([route('banking.accounts', $this->company), route('banking.register', [$this->company, $bank]), route('banking.transactions.create', $this->company), route('banking.imports', [$this->company, $bank]), route('banking.matching', [$this->company, $bank]), route('banking.reconciliations', [$this->company, $bank])] as $url) {
+        foreach ([route('banking.accounts', [$this->company->country, $this->company]), route('banking.register', [$this->company->country, $this->company, $bank]), route('banking.transactions.create', [$this->company->country, $this->company]), route('banking.imports', [$this->company->country, $this->company, $bank]), route('banking.matching', [$this->company->country, $this->company, $bank]), route('banking.reconciliations', [$this->company->country, $this->company, $bank])] as $url) {
             $this->get($url)->assertOk()->assertDontSee('@yield');
         }
     }
@@ -118,6 +118,23 @@ class BankingCashManagementTest extends TestCase
         $transaction = $this->banking->transact($individual, ['type' => 'direct_income', 'bank_account_id' => $bank->id, 'counterparty_account_id' => $individual->accounts()->where('code', '4000')->value('id'), 'transaction_date' => '2026-09-04', 'amount' => '25', 'description' => 'Personal income'], $this->user);
         $this->assertNull($transaction->branch_id);
         $this->assertSame('25.0000', $this->banking->register($individual, $bank)->last()->balance);
+    }
+
+    public function test_banking_jurisdiction_landing_entities_and_forged_routes_are_scoped(): void
+    {
+        $india = $this->jurisdictionEntity('India Books', 'IN', 'INR');
+        $australia = $this->jurisdictionEntity('Australia Books', 'AU', 'AUD');
+        $individual = $this->jurisdictionEntity('NZ Individual', 'NZ', 'NZD', 'individual');
+        $nz = Country::where('code', 'NZ')->firstOrFail();
+        $in = Country::where('code', 'IN')->firstOrFail();
+        $au = Country::where('code', 'AU')->firstOrFail();
+
+        $this->actingAs($this->user)->get(route('banking'))->assertOk()->assertSee('New Zealand')->assertSee('2 accessible accounting entities')->assertSee('India')->assertSee('Australia')->assertDontSee('Singapore');
+        $this->get(route('banking.country', $nz->code))->assertOk()->assertSee($this->company->name)->assertSee($individual->name)->assertDontSee($india->name)->assertDontSee($australia->name);
+        $this->get(route('banking.country', $in->code))->assertOk()->assertSee($india->name)->assertDontSee($this->company->name)->assertDontSee($australia->name);
+        $this->get(route('banking.country', $au->code))->assertOk()->assertSee($australia->name)->assertDontSee($india->name)->assertDontSee($this->company->name);
+        $this->get(route('banking.accounts', [$in->code, $this->company]))->assertNotFound();
+        $this->get(route('banking.accounts', [$nz->code, $india]))->assertNotFound();
     }
 
     private function bank(string $name, string $type, int $ledger): BankAccount
@@ -148,5 +165,10 @@ class BankingCashManagementTest extends TestCase
     private function entity(string $name): Company
     {
         return app(CompanyCreator::class)->create(['entity_type' => 'company', 'name' => $name, 'legal_name' => $name, 'country_id' => Country::where('code', 'IN')->value('id'), 'base_currency_id' => Currency::where('code', 'INR')->value('id'), 'timezone' => 'Asia/Kolkata', 'financial_year_start' => '2026-04-01', 'financial_year_end' => '2027-03-31'], $this->user);
+    }
+
+    private function jurisdictionEntity(string $name, string $country, string $currency, string $type = 'company'): Company
+    {
+        return app(CompanyCreator::class)->create(['entity_type' => $type, 'name' => $name, 'legal_name' => $type === 'company' ? $name : null, 'individual_name' => $type === 'individual' ? $name : null, 'country_id' => Country::where('code', $country)->value('id'), 'base_currency_id' => Currency::where('code', $currency)->value('id'), 'timezone' => 'UTC', 'financial_year_start' => '2026-04-01', 'financial_year_end' => '2027-03-31'], $this->user);
     }
 }
