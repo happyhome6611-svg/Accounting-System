@@ -141,6 +141,119 @@ class PurchasesPayablesTest extends TestCase
         $this->assertThrows(fn () => app(PurchaseService::class)->create($this->company, 'bills', $this->lineData('bills'), $this->user), ValidationException::class);
     }
 
+    public function test_realistic_bill_credit_partial_and_full_payment_acceptance_flow(): void
+    {
+        $service = app(PurchaseService::class);
+        $bill = $service->create($this->company, 'bills', [...$this->lineData('bills'), 'lines' => [$this->line('1', '500', '0')]], $this->user);
+        $service->post($this->company, 'bills', $bill, $this->user);
+        $this->assertSame('500.0000', $bill->fresh()->amount_due);
+
+        $credit = $service->create($this->company, 'credits', [...$this->lineData('credits'), 'supplier_bill_id' => $bill->id, 'lines' => [$this->line('1', '100', '0')]], $this->user);
+        $service->post($this->company, 'credits', $credit, $this->user);
+        $this->assertSame('400.0000', $bill->fresh()->amount_due);
+
+        $partial = $service->create($this->company, 'payments', $this->paymentData('150', [$bill->id => '150']), $this->user);
+        $service->post($this->company, 'payments', $partial, $this->user);
+        $this->assertSame('250.0000', $bill->fresh()->amount_due);
+        $this->assertSame('partially_paid', $bill->fresh()->status);
+
+        $final = $service->create($this->company, 'payments', $this->paymentData('250', [$bill->id => '250']), $this->user);
+        $service->post($this->company, 'payments', $final, $this->user);
+        $this->assertSame('0.0000', $bill->fresh()->amount_due);
+        $this->assertSame('paid', $bill->fresh()->status);
+
+        foreach ([$bill, $credit, $partial, $final] as $document) {
+            $journalId = $document->fresh()->journal_entry_id;
+            $balance = \DB::table('journal_lines')->where('journal_entry_id', $journalId)->selectRaw('SUM(debit-credit) balance')->value('balance');
+            $this->assertSame(0, bccomp((string) $balance, '0', 4));
+            $this->assertSame($this->company->id, \DB::table('journal_entries')->where('id', $journalId)->value('company_id'));
+        }
+
+        $statement = app(PayablesReportService::class)->statement($this->company, $this->supplier);
+        $this->assertSame(['Supplier Bill', 'Supplier Credit', 'Supplier Payment', 'Supplier Payment'], $statement['entries']->pluck('type')->all());
+        $this->assertSame('0.0000', $statement['closing']);
+        $this->assertCount(0, app(PayablesReportService::class)->outstanding($this->company));
+        $this->assertThrows(fn () => $service->post($this->company, 'payments', $final, $this->user), ValidationException::class);
+        $this->assertThrows(fn () => $final->fresh()->update(['amount' => '1']), LogicException::class);
+    }
+
+    public function test_all_aging_buckets_draft_exclusion_and_branch_year_filters(): void
+    {
+        $service = app(PurchaseService::class);
+        $dates = ['2026-09-04', '2026-08-20', '2026-07-20', '2026-06-20', '2026-05-01'];
+        foreach ($dates as $dueDate) {
+            $bill = $service->create($this->company, 'bills', [...$this->lineData('bills'), 'bill_date' => '2026-04-01', 'due_date' => $dueDate], $this->user);
+            $service->post($this->company, 'bills', $bill, $this->user);
+        }
+        $service->create($this->company, 'bills', [...$this->lineData('bills'), 'bill_date' => '2026-04-01', 'due_date' => '2026-05-01'], $this->user);
+
+        $year = $this->company->financialYears()->first();
+        $branch = $this->company->branches()->first();
+        $aging = app(PayablesReportService::class)->aging($this->company, '2026-09-03', $branch->id, $year->id);
+        $this->assertSame(['100.0000', '100.0000', '100.0000', '100.0000', '100.0000'], array_values($aging['totals']));
+        $this->assertCount(5, $aging['rows']);
+        $this->assertCount(0, app(PayablesReportService::class)->outstanding($this->company, null, $branch->id + 999, $year->id));
+    }
+
+    public function test_purchase_route_and_status_aware_view_acceptance(): void
+    {
+        $service = app(PurchaseService::class);
+        $this->actingAs($this->user);
+        foreach (['orders', 'bills', 'credits', 'payments'] as $type) {
+            $this->get(route('purchases.documents', [$this->company, $type]))->assertOk()->assertDontSee('@yield');
+            $this->get(route('purchases.documents.create', [$this->company, $type]))->assertOk()->assertDontSee('@csrf');
+        }
+        $order = $service->create($this->company, 'orders', [...$this->lineData('orders'), 'lines' => [$this->line(), $this->line('2', '25', '5')]], $this->user);
+        $this->get(route('purchases.documents.show', [$this->company, 'orders', $order]))->assertOk()->assertSee('Convert to Supplier Bill');
+        $this->get(route('purchases.documents.edit', [$this->company, 'orders', $order]))->assertOk()->assertSee('+ Add Line');
+        $bill = $service->convertOrder($this->company, $order, ['bill_date' => '2026-09-03', 'due_date' => '2026-10-03'], $this->user);
+        $this->assertSame('145.0000', $bill->total);
+        $this->assertCount(2, $bill->lines);
+        $this->assertSame($order->branch_id, $bill->branch_id);
+        $this->assertSame($order->supplier_id, $bill->supplier_id);
+        $this->assertThrows(fn () => $service->update($this->company, 'orders', $order->fresh(), $this->lineData('orders'), $this->user), ValidationException::class);
+    }
+
+    public function test_financial_year_lifecycle_inactive_branch_and_forged_context_are_rejected(): void
+    {
+        $service = app(PurchaseService::class);
+        $year = $this->company->financialYears()->first();
+        foreach (['closing', 'closed', 'filed'] as $status) {
+            $year->update(['status' => $status]);
+            $this->assertThrows(fn () => $service->create($this->company, 'bills', $this->lineData('bills'), $this->user), ValidationException::class);
+        }
+        $year->update(['status' => 'open']);
+
+        $other = $this->entity('Forged Entity');
+        $data = [...$this->lineData('bills'), 'financial_year_id' => $other->financialYears()->value('id')];
+        $this->assertThrows(fn () => $service->create($this->company, 'bills', $data, $this->user), ValidationException::class);
+        $data = [...$this->lineData('bills'), 'accounting_period_id' => $other->financialYears()->first()->periods()->value('id')];
+        $this->assertThrows(fn () => $service->create($this->company, 'bills', $data, $this->user), ValidationException::class);
+
+        $branch = $this->company->branches()->first();
+        $branch->update(['is_active' => false]);
+        $this->assertThrows(fn () => $service->create($this->company, 'orders', $this->lineData('orders'), $this->user), ModelNotFoundException::class);
+    }
+
+    public function test_cross_entity_document_and_report_tampering_is_rejected(): void
+    {
+        $service = app(PurchaseService::class);
+        $order = $service->create($this->company, 'orders', $this->lineData('orders'), $this->user);
+        $bill = $service->create($this->company, 'bills', $this->lineData('bills'), $this->user);
+        $service->post($this->company, 'bills', $bill, $this->user);
+        $credit = $service->create($this->company, 'credits', [...$this->lineData('credits'), 'supplier_bill_id' => $bill->id], $this->user);
+        $payment = $service->create($this->company, 'payments', $this->paymentData('100', [$bill->id => '100']), $this->user);
+        $other = $this->entity('Tamper Target');
+
+        $this->actingAs($this->user);
+        foreach ([['orders', $order], ['bills', $bill], ['credits', $credit], ['payments', $payment]] as [$type, $document]) {
+            $this->get(route('purchases.documents.show', [$other, $type, $document]))->assertNotFound();
+            $this->get(route('purchases.documents.edit', [$other, $type, $document]))->assertNotFound();
+        }
+        $this->get(route('purchases.reports', ['type' => 'ap', 'company_id' => $this->company->id, 'branch_id' => $other->branches()->value('id')]))->assertNotFound();
+        $this->get(route('purchases.reports', ['type' => 'ap', 'company_id' => $this->company->id, 'financial_year_id' => $other->financialYears()->value('id')]))->assertNotFound();
+    }
+
     private function supplier(string $code = 'SUP-1', string $name = 'Paper Supplier'): Supplier
     {
         return app(SupplierMaintenanceService::class)->create($this->company, [...$this->supplierData(), 'code' => $code, 'name' => $name], $this->user);

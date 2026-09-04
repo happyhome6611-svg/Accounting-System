@@ -191,7 +191,7 @@ class PurchasesController extends Controller
             $data = $reports->aging($company, $r->input('as_of'), $branch, $year);
         } elseif ($type === 'statement') {
             $supplier = $company->suppliers()->findOrFail($r->integer('supplier_id'));
-            $data = $reports->statement($company, $supplier, $r->from, $r->to) + compact('supplier');
+            $data = $reports->statement($company, $supplier, $r->from, $r->to, $branch, $year) + compact('supplier');
         } else {
             abort(404);
         }

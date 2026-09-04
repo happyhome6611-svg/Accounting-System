@@ -33,10 +33,14 @@ final class PayablesReportService
         return compact('rows', 'totals');
     }
 
-    public function statement(Company $c, Supplier $supplier, ?string $from = null, ?string $to = null): array
+    public function statement(Company $c, Supplier $supplier, ?string $from = null, ?string $to = null, ?int $branch = null, ?int $year = null): array
     {
         $entries = collect();
-        $range = fn ($q, $date) => $q->when($from, fn ($x) => $x->whereDate($date, '>=', $from))->when($to, fn ($x) => $x->whereDate($date, '<=', $to));
+        $range = fn ($q, $date) => $q
+            ->when($from, fn ($x) => $x->whereDate($date, '>=', $from))
+            ->when($to, fn ($x) => $x->whereDate($date, '<=', $to))
+            ->when($branch, fn ($x) => $x->where('branch_id', $branch))
+            ->when($year, fn ($x) => $x->where('financial_year_id', $year));
         foreach ($range(SupplierBill::where('company_id', $c->id)->where('supplier_id', $supplier->id)->whereNot('status', 'draft'), 'bill_date')->get() as $b) {
             $entries->push((object) ['date' => $b->bill_date, 'type' => 'Supplier Bill', 'number' => $b->bill_number, 'debit' => '0.0000', 'credit' => $b->total]);
         }foreach ($range(SupplierCredit::where('company_id', $c->id)->where('supplier_id', $supplier->id)->where('status', 'posted'), 'credit_date')->get() as $x) {
