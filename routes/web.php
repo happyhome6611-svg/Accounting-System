@@ -133,7 +133,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/banking/{country}/entities/{company}/accounts/{account}/matching/{row}/create', [BankingController::class, 'createFromStatement'])->name('banking.match.create');
     Route::get('/banking/{country}/entities/{company}/accounts/{account}/reconciliations', [BankingController::class, 'reconciliations'])->name('banking.reconciliations');
     Route::post('/banking/{country}/entities/{company}/accounts/{account}/reconciliations', [BankingController::class, 'storeReconciliation'])->name('banking.reconciliations.store');
-    Route::post('/banking/{country}/entities/{company}/reconciliations/{reconciliation}/complete', [BankingController::class, 'completeReconciliation'])->name('banking.reconciliations.complete');
+    Route::post('/banking/{country}/entities/{company}/accounts/{account}/reconciliations/{reconciliation}/complete', [BankingController::class, 'completeReconciliation'])->name('banking.reconciliations.complete');
     foreach (['tax', 'settings'] as $module) {
         Route::view("/{$module}", 'coming-soon.index', ['module' => ucfirst($module)])->name($module);
     }

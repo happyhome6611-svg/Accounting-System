@@ -175,10 +175,10 @@ class BankingController extends Controller
         return back();
     }
 
-    public function completeReconciliation(Request $r, string $country, Company $company, BankReconciliation $reconciliation, BankingService $s)
+    public function completeReconciliation(Request $r, string $country, Company $company, BankAccount $account, BankReconciliation $reconciliation, BankingService $s)
     {
         $company = $this->company($r, $country, $company);
-        $s->complete($company, $reconciliation, $r->user());
+        $s->complete($company, $account, $reconciliation, $r->user());
 
         return back();
     }

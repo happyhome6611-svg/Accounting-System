@@ -105,21 +105,39 @@ final class BankingService
 
     public function register(Company $c, BankAccount $a, ?string $from = null, ?string $to = null, ?int $branch = null, ?int $year = null): Collection
     {
+        abort_unless($a->company_id === $c->id, 404);
+        abort_if($branch && (! $c->supportsBranches() || ! $c->branches()->whereKey($branch)->exists()), 404);
+        abort_if($year && ! $c->financialYears()->whereKey($year)->exists(), 404);
         $balance = '0.0000';
 
-        return DB::table('journal_lines as l')->join('journal_entries as j', 'j.id', '=', 'l.journal_entry_id')->where('j.company_id', $c->id)->where('l.account_id', $a->ledger_account_id)->whereIn('j.status', ['posted', 'reversed'])->when($from, fn ($q) => $q->whereDate('j.transaction_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('j.transaction_date', '<=', $to))->when($branch, fn ($q) => $q->where('j.branch_id', $branch))->when($year, fn ($q) => $q->where('j.financial_year_id', $year))->orderBy('j.transaction_date')->orderBy('j.id')->select('l.id as journal_line_id', 'j.id as journal_entry_id', 'j.transaction_date', 'j.reference', 'j.description', 'l.debit as money_in', 'l.credit as money_out')->get()->map(function ($r) use (&$balance) {
-            $balance = bcadd($balance, bcsub($r->money_in, $r->money_out, 4), 4);
-            $r->balance = $balance;
+        return DB::table('journal_lines as l')->join('journal_entries as j', 'j.id', '=', 'l.journal_entry_id')
+            ->leftJoin('banking_transactions as bt', 'bt.journal_entry_id', '=', 'j.id')
+            ->leftJoin('customer_receipts as cr', 'cr.journal_entry_id', '=', 'j.id')
+            ->leftJoin('supplier_payments as sp', 'sp.journal_entry_id', '=', 'j.id')
+            ->leftJoin('bank_transaction_matches as bm', 'bm.journal_line_id', '=', 'l.id')
+            ->where('j.company_id', $c->id)->where('l.account_id', $a->ledger_account_id)->whereIn('j.status', ['posted', 'reversed'])
+            ->when($from, fn ($q) => $q->whereDate('j.transaction_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('j.transaction_date', '<=', $to))->when($branch, fn ($q) => $q->where('j.branch_id', $branch))->when($year, fn ($q) => $q->where('j.financial_year_id', $year))
+            ->orderBy('j.transaction_date')->orderBy('j.id')
+            ->select('l.id as journal_line_id', 'j.id as journal_entry_id', 'j.transaction_date', 'j.reference', 'j.description', 'l.debit as money_in', 'l.credit as money_out', 'bt.type as banking_type', 'cr.id as customer_receipt_id', 'sp.id as supplier_payment_id', 'bm.id as match_id')->get()->map(function ($r) use (&$balance) {
+                $balance = bcadd($balance, bcsub($r->money_in, $r->money_out, 4), 4);
+                $r->balance = $balance;
+                $r->source_type = $r->customer_receipt_id ? 'Customer Receipt' : ($r->supplier_payment_id ? 'Supplier Payment' : ($r->banking_type ? str($r->banking_type)->replace('_', ' ')->title()->toString() : 'Manual Journal'));
+                $r->reconciliation_status = $r->match_id ? 'Matched' : 'Unmatched';
 
-            return $r;
-        });
+                return $r;
+            });
     }
 
     public function import(Company $c, BankAccount $a, string $name, string $csv, User $u, bool $override = false): BankStatementImport
     {
         $this->access($c, $u, $a);
-        $lines = preg_split('/\R/', trim($csv));
-        $header = array_map('strtolower', str_getcsv(array_shift($lines)));
+        $lines = array_values(array_filter(preg_split('/\R/', trim($csv)), fn ($line) => trim($line) !== ''));
+        $header = array_map(fn ($value) => strtolower(trim($value, " \t\n\r\0\x0B\xEF\xBB\xBF")), str_getcsv(array_shift($lines) ?? ''));
+        $hasSignedAmount = in_array('amount', $header, true);
+        $hasDebitCredit = in_array('debit', $header, true) && in_array('credit', $header, true);
+        if (! in_array('date', $header, true) || (! $hasSignedAmount && ! $hasDebitCredit)) {
+            throw ValidationException::withMessages(['statement' => 'CSV must contain Date and either Amount or both Debit and Credit columns.']);
+        }
         $batch = BankStatementImport::create(['company_id' => $c->id, 'bank_account_id' => $a->id, 'file_name' => basename($name), 'file_hash' => hash('sha256', $csv), 'row_count' => count($lines), 'status' => 'preview', 'imported_by' => $u->id]);
         $duplicates = 0;
         $errors = 0;
@@ -127,7 +145,13 @@ final class BankingService
         foreach ($lines as $line) {
             if (trim($line) === '') {
                 continue;
-            }$row = array_combine($header, str_getcsv($line));
+            }$values = str_getcsv($line);
+            if (count($values) !== count($header)) {
+                $errors++;
+
+                continue;
+            }
+            $row = array_combine($header, $values);
             try {
                 $date = now()->parse($row['date'])->toDateString();
                 $in = (string) ($row['credit'] ?? 0);
@@ -166,7 +190,8 @@ final class BankingService
 
         return DB::transaction(function () use ($c, $row, $line, $u) {
             $row = BankStatementTransaction::where('company_id', $c->id)->lockForUpdate()->findOrFail($row->id);
-            $line = JournalLine::where('company_id', $c->id)->lockForUpdate()->findOrFail($line->id);
+            abort_unless($row->status === 'unmatched', 422);
+            $line = JournalLine::where('journal_lines.company_id', $c->id)->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')->whereIn('journal_entries.status', ['posted', 'reversed'])->select('journal_lines.*')->lockForUpdate()->findOrFail($line->id);
             $bank = BankAccount::where('company_id', $c->id)->findOrFail($row->bank_account_id);
             if ($line->account_id !== $bank->ledger_account_id || bccomp(bcsub($line->debit, $line->credit, 4), bcsub($row->money_in, $row->money_out, 4), 4) !== 0) {
                 throw ValidationException::withMessages(['match' => 'Bank account and signed amount must match exactly.']);
@@ -181,16 +206,19 @@ final class BankingService
     public function createFromStatement(Company $c, BankStatementTransaction $row, array $data, User $u): BankingTransaction
     {
         $this->access($c, $u);
-        $row = BankStatementTransaction::where('company_id', $c->id)->where('status', 'unmatched')->findOrFail($row->id);
-        $incoming = bccomp($row->money_in, '0', 4) > 0;
-        if (($incoming && ! in_array($data['type'], ['interest_received', 'direct_income'], true)) || (! $incoming && ! in_array($data['type'], ['bank_fee', 'interest_paid', 'direct_expense'], true))) {
-            throw ValidationException::withMessages(['type' => 'Transaction type must match the statement money direction.']);
-        }
-        $transaction = $this->transact($c, [...$data, 'bank_account_id' => $row->bank_account_id, 'transaction_date' => $row->transaction_date->toDateString(), 'amount' => $incoming ? $row->money_in : $row->money_out, 'reference' => $row->reference, 'description' => $row->description], $u);
-        $line = JournalLine::where('journal_entry_id', $transaction->journal_entry_id)->where('account_id', BankAccount::findOrFail($row->bank_account_id)->ledger_account_id)->firstOrFail();
-        $this->match($c, $row, $line, $u);
 
-        return $transaction;
+        return DB::transaction(function () use ($c, $row, $data, $u) {
+            $row = BankStatementTransaction::where('company_id', $c->id)->where('status', 'unmatched')->lockForUpdate()->findOrFail($row->id);
+            $incoming = bccomp($row->money_in, '0', 4) > 0;
+            if (($incoming && ! in_array($data['type'], ['interest_received', 'direct_income'], true)) || (! $incoming && ! in_array($data['type'], ['bank_fee', 'interest_paid', 'direct_expense'], true))) {
+                throw ValidationException::withMessages(['type' => 'Transaction type must match the statement money direction.']);
+            }
+            $transaction = $this->transact($c, [...$data, 'bank_account_id' => $row->bank_account_id, 'transaction_date' => $row->transaction_date->toDateString(), 'amount' => $incoming ? $row->money_in : $row->money_out, 'reference' => $row->reference, 'description' => $row->description], $u);
+            $line = JournalLine::where('journal_entry_id', $transaction->journal_entry_id)->where('account_id', BankAccount::where('company_id', $c->id)->findOrFail($row->bank_account_id)->ledger_account_id)->firstOrFail();
+            $this->match($c, $row, $line, $u);
+
+            return $transaction;
+        });
     }
 
     public function reconcile(Company $c, BankAccount $a, array $d, User $u): BankReconciliation
@@ -204,11 +232,11 @@ final class BankingService
         return $r;
     }
 
-    public function complete(Company $c, BankReconciliation $r, User $u): void
+    public function complete(Company $c, BankAccount $a, BankReconciliation $r, User $u): void
     {
-        $this->access($c, $u);
-        DB::transaction(function () use ($c, $r, $u) {
-            $r = BankReconciliation::where('company_id', $c->id)->lockForUpdate()->findOrFail($r->id);
+        $this->access($c, $u, $a);
+        DB::transaction(function () use ($c, $a, $r, $u) {
+            $r = BankReconciliation::where('company_id', $c->id)->where('bank_account_id', $a->id)->lockForUpdate()->findOrFail($r->id);
             if (bccomp($r->difference, '0', 4) !== 0) {
                 throw ValidationException::withMessages(['difference' => 'Reconciliation difference must be zero before completion.']);
             }$r->update(['status' => 'completed', 'completed_at' => now()]);

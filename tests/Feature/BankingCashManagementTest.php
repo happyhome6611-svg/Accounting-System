@@ -6,10 +6,15 @@ use App\Models\BankAccount;
 use App\Models\Company;
 use App\Models\Country;
 use App\Models\Currency;
+use App\Models\CustomerReceipt;
 use App\Models\JournalLine;
+use App\Models\SupplierPayment;
 use App\Models\User;
 use App\Services\BankingService;
 use App\Services\CompanyCreator;
+use App\Services\JournalService;
+use App\Services\PurchaseService;
+use App\Services\SalesService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
@@ -97,7 +102,7 @@ class BankingCashManagementTest extends TestCase
         $this->assertDatabaseHas('journal_lines', ['journal_entry_id' => $fee->journal_entry_id, 'account_id' => $bank->ledger_account_id, 'credit' => '25.0000']);
         $reconciliation = $this->banking->reconcile($this->company, $bank, ['statement_end_date' => '2026-09-04', 'statement_closing_balance' => '75'], $this->user);
         $this->assertSame('0.0000', $reconciliation->difference);
-        $this->banking->complete($this->company, $reconciliation, $this->user);
+        $this->banking->complete($this->company, $bank, $reconciliation, $this->user);
         $this->assertSame('completed', $reconciliation->fresh()->status);
         $this->assertThrows(fn () => $reconciliation->fresh()->update(['notes' => 'forged']), LogicException::class);
     }
@@ -135,6 +140,105 @@ class BankingCashManagementTest extends TestCase
         $this->get(route('banking.country', $au->code))->assertOk()->assertSee($australia->name)->assertDontSee($india->name)->assertDontSee($this->company->name);
         $this->get(route('banking.accounts', [$in->code, $this->company]))->assertNotFound();
         $this->get(route('banking.accounts', [$nz->code, $india]))->assertNotFound();
+    }
+
+    public function test_receipt_payment_manual_journal_and_banking_activity_share_one_ledger_register(): void
+    {
+        $bank = $this->bank('Operating Bank', 'bank', $this->company->accounts()->where('code', '1000')->value('id'));
+        $branch = $this->branch();
+        $year = $this->company->financialYears()->where('is_current', true)->firstOrFail();
+        $period = $year->periods()->whereDate('starts_on', '<=', '2026-09-04')->whereDate('ends_on', '>=', '2026-09-04')->firstOrFail();
+        $customer = $this->company->customers()->create(['code' => 'CUST-ACCEPT', 'name' => 'Acceptance Customer', 'currency_id' => $this->company->base_currency_id, 'receivable_account_id' => $this->company->accounts()->where('code', '1100')->value('id'), 'created_by' => $this->user->id, 'updated_by' => $this->user->id]);
+        $supplier = $this->company->suppliers()->create(['code' => 'SUP-ACCEPT', 'name' => 'Acceptance Supplier', 'currency_id' => $this->company->base_currency_id, 'payable_account_id' => $this->company->accounts()->where('type', 'liability')->value('id'), 'created_by' => $this->user->id, 'updated_by' => $this->user->id]);
+
+        $receipt = CustomerReceipt::create(['company_id' => $this->company->id, 'customer_id' => $customer->id, 'branch_id' => $branch, 'financial_year_id' => $year->id, 'accounting_period_id' => $period->id, 'receipt_number' => 'REC-ACCEPT', 'receipt_date' => '2026-09-01', 'amount' => '1200', 'payment_method' => 'transfer', 'receiving_account_id' => $bank->ledger_account_id, 'status' => 'draft', 'created_by' => $this->user->id, 'updated_by' => $this->user->id]);
+        app(SalesService::class)->postReceipt($receipt, $this->user);
+        $payment = SupplierPayment::create(['company_id' => $this->company->id, 'supplier_id' => $supplier->id, 'branch_id' => $branch, 'financial_year_id' => $year->id, 'accounting_period_id' => $period->id, 'currency_id' => $this->company->base_currency_id, 'payment_number' => 'SPAY-ACCEPT', 'payment_date' => '2026-09-02', 'payment_account_id' => $bank->ledger_account_id, 'amount' => '450', 'status' => 'draft', 'created_by' => $this->user->id, 'updated_by' => $this->user->id]);
+        app(PurchaseService::class)->post($this->company, 'payments', $payment, $this->user);
+        $fee = $this->bankTx('bank_fee', $bank, '25', $this->company->accounts()->where('code', '5000')->value('id'));
+        $interest = $this->bankTx('interest_received', $bank, '10', $this->company->accounts()->where('code', '4000')->value('id'));
+        $expense = $this->bankTx('direct_expense', $bank, '75', $this->company->accounts()->where('code', '5000')->value('id'));
+        $income = $this->bankTx('direct_income', $bank, '100', $this->company->accounts()->where('code', '4000')->value('id'));
+        $journals = app(JournalService::class);
+        $manual = $journals->create($this->company, ['branch_id' => $branch, 'transaction_date' => '2026-09-04', 'reference' => 'MANUAL-BANK', 'description' => 'Manual bank deposit', 'lines' => [['account_id' => $bank->ledger_account_id, 'description' => 'Deposit', 'debit' => '40', 'credit' => '0'], ['account_id' => $this->company->accounts()->where('code', '4000')->value('id'), 'description' => 'Deposit', 'debit' => '0', 'credit' => '40']]], $this->user);
+        $journals->post($manual, $this->user);
+
+        $rows = $this->banking->register($this->company, $bank);
+        $this->assertSame(['Customer Receipt', 'Supplier Payment', 'Bank Fee', 'Interest Received', 'Direct Expense', 'Direct Income', 'Manual Journal'], $rows->pluck('source_type')->all());
+        $this->assertSame('800.0000', $rows->last()->balance);
+        $this->assertSame(0, bccomp((string) $rows->first()->money_in, '1200', 4));
+        $this->assertSame(0, bccomp((string) $rows->get(1)->money_out, '450', 4));
+        $this->assertDatabaseCount('journal_entries', 7);
+        foreach ([$receipt->fresh()->journal_entry_id, $payment->fresh()->journal_entry_id, $fee->journal_entry_id, $interest->journal_entry_id, $expense->journal_entry_id, $income->journal_entry_id, $manual->id] as $journalId) {
+            $this->assertSame(0, bccomp((string) \DB::table('journal_lines')->where('journal_entry_id', $journalId)->selectRaw('SUM(debit-credit) balance')->value('balance'), '0', 4));
+        }
+    }
+
+    public function test_csv_variants_invalid_formats_and_statement_evidence_do_not_change_ledger(): void
+    {
+        $bank = $this->bank('Operating Bank', 'bank', $this->company->accounts()->where('code', '1000')->value('id'));
+        $signed = "date,description,reference,amount\n2026-08-01,Customer payment,INV1001,1200.00\n2026-08-03,Monthly fee,FEE-AUG,-25.00\n";
+        $split = "date,description,reference,debit,credit\n2026-08-05,Supplier payment,SUP500,450.00,0\n2026-08-06,Bank interest,INT-AUG,0,10.00\n2026-08-07,Both invalid,BAD,2,2\nmalformed,row\n";
+
+        $first = $this->banking->import($this->company, $bank, 'signed.csv', $signed, $this->user);
+        $second = $this->banking->import($this->company, $bank, 'split.csv', $split, $this->user);
+        $this->assertSame([2, 0, 0], [$first->imported_count, $first->duplicate_count, $first->error_count]);
+        $this->assertSame([2, 0, 2], [$second->imported_count, $second->duplicate_count, $second->error_count]);
+        $this->assertDatabaseCount('journal_entries', 0);
+        $this->assertCount(0, $this->banking->register($this->company, $bank));
+        $this->assertSame('unmatched', $first->rows->first()->status);
+        $duplicate = $this->banking->import($this->company, $bank, 'signed-again.csv', $signed, $this->user);
+        $this->assertSame(2, $duplicate->duplicate_count);
+        $override = $this->banking->import($this->company, $bank, 'signed-override.csv', $signed, $this->user, true);
+        $this->assertSame(2, $override->imported_count);
+        $this->assertDatabaseCount('journal_entries', 0);
+        $this->assertThrows(fn () => $this->banking->import($this->company, $bank, 'missing.csv', "description,reference\nBad,BAD", $this->user), ValidationException::class);
+    }
+
+    public function test_register_match_and_reconciliation_reject_forged_context_and_draft_accounting(): void
+    {
+        $bank = $this->bank('Operating Bank', 'bank', $this->company->accounts()->where('code', '1000')->value('id'));
+        $other = $this->entity('Other Entity');
+        $otherBank = $this->banking->createAccount($other, ['name' => 'Other Bank', 'type' => 'bank', 'ledger_account_id' => $other->accounts()->where('code', '1000')->value('id'), 'currency_id' => $other->base_currency_id, 'is_active' => true], $this->user);
+        $this->assertThrows(fn () => $this->banking->register($this->company, $otherBank));
+        $this->assertThrows(fn () => $this->banking->register($this->company, $bank, branch: $other->branches()->value('id')));
+        $this->assertThrows(fn () => $this->banking->register($this->company, $bank, year: $other->financialYears()->value('id')));
+
+        $batch = $this->banking->import($this->company, $bank, 'match.csv', "date,description,reference,amount\n2026-09-04,Draft candidate,DRAFT,50", $this->user);
+        $draft = app(JournalService::class)->create($this->company, ['branch_id' => $this->branch(), 'transaction_date' => '2026-09-04', 'description' => 'Draft candidate', 'lines' => [['account_id' => $bank->ledger_account_id, 'description' => 'Draft', 'debit' => '50', 'credit' => '0'], ['account_id' => $this->company->accounts()->where('code', '4000')->value('id'), 'description' => 'Draft', 'debit' => '0', 'credit' => '50']]], $this->user);
+        $this->assertThrows(fn () => $this->banking->match($this->company, $batch->rows->first(), $draft->lines()->where('account_id', $bank->ledger_account_id)->firstOrFail(), $this->user));
+        $this->assertSame('unmatched', $batch->rows->first()->fresh()->status);
+
+        $reconciliation = $this->banking->reconcile($this->company, $bank, ['statement_end_date' => '2026-09-04', 'statement_closing_balance' => '1'], $this->user);
+        $this->assertThrows(fn () => $this->banking->complete($this->company, $bank, $reconciliation, $this->user), ValidationException::class);
+        $otherReconciliation = $this->banking->reconcile($other, $otherBank, ['statement_end_date' => '2026-09-04', 'statement_closing_balance' => '0'], $this->user);
+        $this->assertThrows(fn () => $this->banking->complete($this->company, $bank, $otherReconciliation, $this->user));
+    }
+
+    public function test_banking_posting_rejects_invalid_amount_account_branch_and_financial_context(): void
+    {
+        $bank = $this->bank('Operating Bank', 'bank', $this->company->accounts()->where('code', '1000')->value('id'));
+        $other = $this->entity('Other Entity');
+        $otherBank = $this->banking->createAccount($other, ['name' => 'Other Bank', 'type' => 'bank', 'ledger_account_id' => $other->accounts()->where('code', '1000')->value('id'), 'currency_id' => $other->base_currency_id, 'is_active' => true], $this->user);
+        $data = ['type' => 'transfer', 'bank_account_id' => $bank->id, 'destination_bank_account_id' => $otherBank->id, 'branch_id' => $this->branch(), 'transaction_date' => '2026-09-04', 'amount' => '1000', 'description' => 'Forged transfer'];
+        $this->assertThrows(fn () => $this->banking->transact($this->company, $data, $this->user));
+        foreach (['0', '-1'] as $amount) {
+            $this->assertThrows(fn () => $this->banking->transact($this->company, [...$data, 'destination_bank_account_id' => $bank->id, 'amount' => $amount], $this->user), ValidationException::class);
+        }
+        $bank->update(['is_active' => false]);
+        $this->assertThrows(fn () => $this->bankTx('bank_fee', $bank, '25', $this->company->accounts()->where('code', '5000')->value('id')));
+        $bank->update(['is_active' => true]);
+        $branch = $this->company->branches()->firstOrFail();
+        $branch->update(['is_active' => false]);
+        $this->assertThrows(fn () => $this->bankTx('bank_fee', $bank, '25', $this->company->accounts()->where('code', '5000')->value('id')));
+        $branch->update(['is_active' => true]);
+        $period = $this->company->financialYears()->where('is_current', true)->firstOrFail()->periods()->whereDate('starts_on', '<=', '2026-09-04')->whereDate('ends_on', '>=', '2026-09-04')->firstOrFail();
+        $period->update(['status' => 'closed']);
+        $this->assertThrows(fn () => $this->bankTx('bank_fee', $bank, '25', $this->company->accounts()->where('code', '5000')->value('id')), ValidationException::class);
+        $period->update(['status' => 'open']);
+        $this->assertThrows(fn () => $this->banking->transact($this->company, [...$data, 'type' => 'bank_fee', 'destination_bank_account_id' => null, 'counterparty_account_id' => $this->company->accounts()->where('code', '5000')->value('id'), 'transaction_date' => '2028-01-01'], $this->user), ValidationException::class);
+        $this->assertDatabaseCount('banking_transactions', 0);
+        $this->assertDatabaseCount('journal_entries', 0);
     }
 
     private function bank(string $name, string $type, int $ledger): BankAccount
