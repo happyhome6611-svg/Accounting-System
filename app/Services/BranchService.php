@@ -10,12 +10,19 @@ use Illuminate\Validation\ValidationException;
 
 final class BranchService
 {
-    private const TRANSACTION_TABLES = ['journal_entries', 'sales_quotations', 'sales_orders', 'sales_invoices', 'sales_credit_notes', 'customer_receipts', 'purchase_orders', 'supplier_bills', 'supplier_credits', 'supplier_payments'];
+    private const TRANSACTION_TABLES = ['journal_entries', 'sales_quotations', 'sales_orders', 'sales_invoices', 'sales_credit_notes', 'customer_receipts', 'purchase_orders', 'supplier_bills', 'supplier_credits', 'supplier_payments', 'banking_transactions'];
 
     public function __construct(private AuditLogger $audit) {}
 
-    public function resolve(Company $company, ?int $id, bool $active = true): Branch
+    public function resolve(Company $company, ?int $id, bool $active = true): ?Branch
     {
+        if (! $company->supportsBranches()) {
+            if ($id) {
+                throw ValidationException::withMessages(['branch_id' => 'Branches do not apply to this accounting entity.']);
+            }
+
+            return null;
+        }
         $query = $company->branches();
         if ($active) {
             $query->where('is_active', true);

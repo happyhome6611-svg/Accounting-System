@@ -99,4 +99,9 @@ class Company extends Model
     {
         return $this->hasMany(SupplierBill::class);
     }
+
+    public function bankAccounts()
+    {
+        return $this->hasMany(BankAccount::class);
+    }
 }

@@ -1,0 +1,1 @@
+@extends('layouts.app') @section('content')<h1>Banking & Cash Management</h1><div class="row g-3">@foreach($companies as $company)<div class="col-md-6"><div class="card p-4"><h4>{{$company->entity_label}}</h4><a class="btn btn-primary" href="{{route('banking.accounts',$company)}}">Bank & Cash Accounts</a></div></div>@endforeach</div>@endsection

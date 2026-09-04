@@ -22,7 +22,7 @@ final class JournalService
         $period = $this->validateDraft($company, $data);
 
         return DB::transaction(function () use ($company, $data, $user, $branch, $period) {
-            $journal = $company->journals()->create(['branch_id' => $branch->id, 'financial_year_id' => $period->financial_year_id, 'accounting_period_id' => $period->id, 'journal_number' => $this->nextNumber($company), 'transaction_date' => $data['transaction_date'], 'reference' => $data['reference'] ?? null, 'description' => $data['description'], 'status' => 'draft', 'created_by' => $user->id, 'updated_by' => $user->id]);
+            $journal = $company->journals()->create(['branch_id' => $branch?->id, 'financial_year_id' => $period->financial_year_id, 'accounting_period_id' => $period->id, 'journal_number' => $this->nextNumber($company), 'transaction_date' => $data['transaction_date'], 'reference' => $data['reference'] ?? null, 'description' => $data['description'], 'status' => 'draft', 'created_by' => $user->id, 'updated_by' => $user->id]);
             foreach ($data['lines'] as $line) {
                 $journal->lines()->create(['company_id' => $company->id, ...$line]);
             }$this->audit->log('journal.created', $journal, $company->id, $user->id, null, $journal->toArray());
@@ -44,7 +44,7 @@ final class JournalService
                 throw ValidationException::withMessages(['journal' => 'Only an ordinary Draft journal can be edited.']);
             }
             $before = $journal->toArray() + ['lines' => $journal->lines->toArray()];
-            $journal->update(['branch_id' => $branch->id, 'financial_year_id' => $period->financial_year_id, 'accounting_period_id' => $period->id, 'transaction_date' => $data['transaction_date'], 'reference' => $data['reference'] ?? null, 'description' => $data['description'], 'updated_by' => $user->id]);
+            $journal->update(['branch_id' => $branch?->id, 'financial_year_id' => $period->financial_year_id, 'accounting_period_id' => $period->id, 'transaction_date' => $data['transaction_date'], 'reference' => $data['reference'] ?? null, 'description' => $data['description'], 'updated_by' => $user->id]);
             $journal->lines()->delete();
             foreach ($data['lines'] as $line) {
                 $journal->lines()->create(['company_id' => $journal->company_id, ...$line]);
