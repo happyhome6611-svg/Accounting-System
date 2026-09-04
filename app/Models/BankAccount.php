@@ -32,4 +32,9 @@ class BankAccount extends Model
     {
         return $this->hasMany(BankStatementImport::class);
     }
+
+    public function reconciliations()
+    {
+        return $this->hasMany(BankReconciliation::class);
+    }
 }

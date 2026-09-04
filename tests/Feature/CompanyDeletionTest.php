@@ -113,6 +113,6 @@ class CompanyDeletionTest extends TestCase
         $this->actingAs($outsider)->get(route('companies.delete', $this->company))->assertNotFound();
         $this->actingAs($outsider)->delete(route('companies.destroy', $this->company), ['confirmation_name' => $this->company->name])->assertNotFound();
         $this->actingAs($this->owner)->delete(route('companies.destroy', $this->company), ['confirmation_name' => 'forged'])->assertSessionHasErrors('confirmation_name');
-        $this->assertDatabaseHas('companies',['id' => $this->company->id]);
+        $this->assertDatabaseHas('companies', ['id' => $this->company->id]);
     }
 }

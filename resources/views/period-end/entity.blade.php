@@ -1,0 +1,5 @@
+@extends('layouts.app')
+@section('content')
+<nav class="mb-3"><a href="{{ route('period-end') }}">Period-End</a> &gt; <a href="{{ route('period-end.country', $company->country->code) }}">{{ $company->country->name }}</a> &gt; {{ $company->entity_label }}</nav><h1>{{ $company->entity_label }} — Financial Years</h1>
+@foreach($years as $year)<div class="card p-3 mb-3"><div class="d-flex justify-content-between"><div><h4>{{ $year->name }}</h4><span class="badge text-bg-secondary">{{ ucfirst($year->status) }}</span></div><a class="btn btn-outline-primary" href="{{ route('period-end.year', [$company->country->code, $company, $year]) }}">Year-End</a></div><div class="mt-3 d-flex flex-wrap gap-2">@foreach($year->periods as $period)<a class="btn btn-sm {{ $period->status === 'closed' ? 'btn-outline-secondary' : 'btn-outline-primary' }}" href="{{ route('period-end.workspace', [$company->country->code, $company, $year, $period]) }}">{{ $period->name }} · {{ ucfirst($period->status) }}</a>@endforeach</div></div>@endforeach
+@endsection

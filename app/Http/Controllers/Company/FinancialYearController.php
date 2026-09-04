@@ -6,8 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\AccountingPeriod;
 use App\Models\Company;
 use App\Models\FinancialYear;
-use App\Services\AccountingPeriodService;
+use App\Services\ClosingReadinessService;
 use App\Services\FinancialYearService;
+use App\Services\PeriodEndService;
 use Illuminate\Http\Request;
 
 class FinancialYearController extends Controller
@@ -76,22 +77,23 @@ class FinancialYearController extends Controller
         return back()->with('success', 'Financial Year marked Filed. Normal reopening is permanently blocked.');
     }
 
-    public function closePeriod(Request $request, Company $company, FinancialYear $financialYear, AccountingPeriod $period, AccountingPeriodService $service)
+    public function closePeriod(Request $request, Company $company, FinancialYear $financialYear, AccountingPeriod $period, ClosingReadinessService $readiness, PeriodEndService $service)
     {
         $company = $this->entity($request, $company);
         abort_unless($financialYear->company_id === $company->id && $period->company_id === $company->id && $period->financial_year_id === $financialYear->id, 404);
         $data = $request->validate(['reason' => 'required|string|min:10', 'confirmation' => 'required|in:CLOSE PERIOD']);
-        $service->close($period, $data['reason'], $request->user());
+        $readiness->initialize($period, $request->user());
+        $service->close($company, $period, $data['reason'], $request->user());
 
         return back()->with('success', "Accounting Period {$period->name} closed.");
     }
 
-    public function reopenPeriod(Request $request, Company $company, FinancialYear $financialYear, AccountingPeriod $period, AccountingPeriodService $service)
+    public function reopenPeriod(Request $request, Company $company, FinancialYear $financialYear, AccountingPeriod $period, PeriodEndService $service)
     {
         $company = $this->entity($request, $company);
         abort_unless($financialYear->company_id === $company->id && $period->company_id === $company->id && $period->financial_year_id === $financialYear->id, 404);
         $data = $request->validate(['reason' => 'required|string|min:10', 'confirmation' => 'required|in:REOPEN PERIOD']);
-        $service->reopen($period, $data['reason'], $request->user());
+        $service->reopen($company, $period, $data['reason'], $request->user());
 
         return back()->with('success', "Accounting Period {$period->name} reopened.");
     }

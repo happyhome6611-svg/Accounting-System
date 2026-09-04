@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 
 final class SalesWorkflowService
 {
-    public function __construct(private SalesService $sales, private DocumentNumberService $numbers, private BranchService $branches, private AuditLogger $audit, private FinancialYearResolver $years) {}
+    public function __construct(private SalesService $sales, private DocumentNumberService $numbers, private BranchService $branches, private AuditLogger $audit, private FinancialYearResolver $years, private AccountingLockService $locks) {}
 
     public function create(Company $company, string $type, array $data, User $user): Model
     {
@@ -104,6 +104,9 @@ final class SalesWorkflowService
             $document instanceof SalesOrder => 'order_date',
             default => 'invoice_date',
         };
+        if (! ($document instanceof SalesQuotation || $document instanceof SalesOrder)) {
+            $this->locks->assertPostingAllowed($company, $data[$dateField], $user);
+        }
         $period = $this->years->resolve($company, $data[$dateField], isset($data['financial_year_id']) ? (int) $data['financial_year_id'] : null, isset($data['accounting_period_id']) ? (int) $data['accounting_period_id'] : null, ! ($document instanceof SalesQuotation || $document instanceof SalesOrder));
         $data['financial_year_id'] = $period->financial_year_id;
         if ($document instanceof SalesInvoice) {
@@ -137,6 +140,7 @@ final class SalesWorkflowService
 
     private function saveCreditNote(Company $company, SalesCreditNote $note, array $data, User $user): SalesCreditNote
     {
+        $this->locks->assertPostingAllowed($company, $data['credit_note_date'], $user);
         $period = $this->years->resolve($company, $data['credit_note_date'], isset($data['financial_year_id']) ? (int) $data['financial_year_id'] : null, isset($data['accounting_period_id']) ? (int) $data['accounting_period_id'] : null);
         $data['financial_year_id'] = $period->financial_year_id;
         $data['accounting_period_id'] = $period->id;
@@ -171,6 +175,7 @@ final class SalesWorkflowService
 
     private function saveReceipt(Company $company, CustomerReceipt $receipt, array $data, User $user): CustomerReceipt
     {
+        $this->locks->assertPostingAllowed($company, $data['receipt_date'], $user);
         $period = $this->years->resolve($company, $data['receipt_date'], isset($data['financial_year_id']) ? (int) $data['financial_year_id'] : null, isset($data['accounting_period_id']) ? (int) $data['accounting_period_id'] : null);
         $data['financial_year_id'] = $period->financial_year_id;
         $data['accounting_period_id'] = $period->id;

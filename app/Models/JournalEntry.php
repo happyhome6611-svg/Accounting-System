@@ -39,6 +39,11 @@ class JournalEntry extends Model
         return $this->hasOne(self::class, 'reversal_of_id');
     }
 
+    public function reversalSchedule()
+    {
+        return $this->hasOne(AdjustmentReversalSchedule::class, 'adjustment_journal_id');
+    }
+
     protected static function booted(): void
     {
         static::updating(function (self $j) {

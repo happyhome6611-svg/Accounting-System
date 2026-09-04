@@ -14,7 +14,7 @@ use Illuminate\Validation\ValidationException;
 
 final class PurchaseService
 {
-    public function __construct(private DocumentNumberService $numbers, private BranchService $branches, private FinancialYearResolver $years, private JournalService $journals, private AuditLogger $audit) {}
+    public function __construct(private DocumentNumberService $numbers, private BranchService $branches, private FinancialYearResolver $years, private JournalService $journals, private AuditLogger $audit, private AccountingLockService $locks) {}
 
     public function create(Company $company, string $type, array $data, User $user): Model
     {
@@ -39,6 +39,9 @@ final class PurchaseService
     private function saveLines(Company $company, Model $document, string $type, array $data, User $user): Model
     {
         $dateField = ['orders' => 'order_date', 'bills' => 'bill_date', 'credits' => 'credit_date'][$type];
+        if ($type !== 'orders') {
+            $this->locks->assertPostingAllowed($company, $data[$dateField], $user);
+        }
         $period = $this->years->resolve($company, $data[$dateField], $data['financial_year_id'] ?? null, $data['accounting_period_id'] ?? null, $type !== 'orders');
         $branch = $this->branches->resolve($company, $data['branch_id'] ?? null);
         $supplier = $company->suppliers()->where('is_active', true)->findOrFail($data['supplier_id']);
@@ -95,6 +98,7 @@ final class PurchaseService
 
     private function savePayment(Company $company, SupplierPayment $payment, array $data, User $user): SupplierPayment
     {
+        $this->locks->assertPostingAllowed($company, $data['payment_date'], $user);
         $period = $this->years->resolve($company, $data['payment_date'], $data['financial_year_id'] ?? null, $data['accounting_period_id'] ?? null);
         $branch = $this->branches->resolve($company, $data['branch_id'] ?? null);
         $supplier = $company->suppliers()->where('is_active', true)->findOrFail($data['supplier_id']);
