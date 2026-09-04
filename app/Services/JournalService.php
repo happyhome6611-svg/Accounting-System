@@ -80,12 +80,22 @@ final class JournalService
         $this->assertAccessible($journal->company_id, $user);
 
         return DB::transaction(function () use ($journal, $user) {
-            $journal = JournalEntry::query()->lockForUpdate()->with(['lines.account', 'period'])->findOrFail($journal->id);
+            $journal = JournalEntry::query()->lockForUpdate()->with(['lines.account', 'period', 'financialYear'])->findOrFail($journal->id);
+            $company = Company::findOrFail($journal->company_id);
+            $lockOverridden = $this->locks->assertPostingAllowed($company, $journal->transaction_date->toDateString(), $user, $journal->journal_type, $journal->reason);
             $errors = [];
+            if (! $company->is_active) {
+                $errors[] = 'Inactive companies cannot post accounting transactions.';
+            }
+            if ($journal->branch_id && ! $company->branches()->whereKey($journal->branch_id)->where('is_active', true)->exists()) {
+                $errors[] = 'Journal branch must remain active and belong to the company.';
+            }
             if ($journal->status !== 'draft') {
                 $errors[] = 'Journal must be Draft.';
             }if ($journal->period->status !== 'open' && $journal->journal_type !== 'closing') {
                 $errors[] = 'Accounting period is closed.';
+            }if (($journal->journal_type === 'closing' && $journal->financialYear->status !== 'closing') || ($journal->journal_type !== 'closing' && $journal->financialYear->status !== 'open')) {
+                $errors[] = 'Journal type is not permitted for the current Financial Year status.';
             }if (! $journal->transaction_date->betweenIncluded($journal->period->starts_on, $journal->period->ends_on)) {
                 $errors[] = 'Journal date must fall within the accounting period.';
             }if ($journal->lines->count() < 2) {
@@ -108,6 +118,9 @@ final class JournalService
             $journal->update(['status' => 'posted', 'posted_at' => now(), 'posted_by' => $user->id, 'updated_by' => $user->id]);
             app()->forgetInstance('accounting.system-write');
             $this->audit->log('journal.posted', $journal, $journal->company_id, $user->id, ['status' => 'draft'], ['status' => 'posted']);
+            if ($lockOverridden) {
+                $this->audit->log('accounting_lock.overridden', $journal, $journal->company_id, $user->id, $company->only(['bookkeeping_lock_date', 'adviser_lock_date']), ['journal_type' => $journal->journal_type, 'reason' => $journal->reason]);
+            }
 
             return $journal;
         });

@@ -10,16 +10,22 @@ use Illuminate\Validation\ValidationException;
 
 final class AccountingLockService
 {
-    public function assertPostingAllowed(Company $company, string $date, User $user, string $journalType = 'standard', ?string $reason = null): void
+    public function assertPostingAllowed(Company $company, string $date, User $user, string $journalType = 'standard', ?string $reason = null): bool
     {
-        $lockDate = Company::whereKey($company->id)->value('bookkeeping_lock_date');
-        if (! $lockDate || $date > CarbonImmutable::parse($lockDate)->toDateString()) {
-            return;
+        $locks = Company::whereKey($company->id)->firstOrFail(['bookkeeping_lock_date', 'adviser_lock_date']);
+        $lockDate = collect([$locks->bookkeeping_lock_date, $locks->adviser_lock_date])
+            ->filter()
+            ->map(fn ($value) => CarbonImmutable::parse($value)->toDateString())
+            ->max();
+        if (! $lockDate || $date > $lockDate) {
+            return false;
         }
-        $overrideType = in_array($journalType, ['adjusting', 'prior_period_adjustment'], true);
+        $overrideType = in_array($journalType, ['adjusting', 'prior_period_adjustment', 'reversing', 'closing'], true);
         if (! $overrideType || ! $this->isAccountant($company, $user) || mb_strlen(trim((string) $reason)) < 10) {
-            throw ValidationException::withMessages(['transaction_date' => 'Posting date is on or before the Bookkeeping Lock Date. An authorised adjustment with a reason is required.']);
+            throw ValidationException::withMessages(['transaction_date' => 'Posting date is on or before an Accounting Lock Date. An authorised adjustment with a reason is required.']);
         }
+
+        return true;
     }
 
     public function update(Company $company, array $data, User $user, AuditLogger $audit): void

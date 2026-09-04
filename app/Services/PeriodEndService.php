@@ -35,7 +35,12 @@ final class PeriodEndService
             throw ValidationException::withMessages(['journal' => 'Only a posted Adjusting journal can be scheduled for reversal.']);
         }
 
-        return AdjustmentReversalSchedule::firstOrCreate(['adjustment_journal_id' => $journal->id], ['company_id' => $company->id, 'reversal_date' => $date, 'status' => 'scheduled', 'created_by' => $user->id]);
+        $schedule = AdjustmentReversalSchedule::firstOrCreate(['adjustment_journal_id' => $journal->id], ['company_id' => $company->id, 'reversal_date' => $date, 'status' => 'scheduled', 'created_by' => $user->id]);
+        if ($schedule->wasRecentlyCreated) {
+            $this->audit->log('adjustment_reversal.scheduled', $schedule, $company->id, $user->id);
+        }
+
+        return $schedule;
     }
 
     public function postReversal(Company $company, AdjustmentReversalSchedule $schedule, User $user): JournalEntry
@@ -88,6 +93,7 @@ final class PeriodEndService
     public function reopen(Company $company, AccountingPeriod $period, string $reason, User $user): void
     {
         $this->locks->authorize($company, $user);
+        abort_unless($period->company_id === $company->id, 404);
         if ($period->financialYear->status === 'filed') {
             throw ValidationException::withMessages(['period' => 'A period in a Filed Financial Year cannot be reopened.']);
         }

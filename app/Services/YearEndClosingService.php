@@ -32,7 +32,7 @@ final class YearEndClosingService
             if (DB::table('adjustment_reversal_schedules')->where('company_id', $company->id)->where('status', 'scheduled')->whereDate('reversal_date', '<=', $year->ends_on)->exists()) {
                 throw ValidationException::withMessages(['financial_year' => 'Scheduled adjustment reversals remain unresolved.']);
             }
-            $equity = $company->accounts()->where('type', 'equity')->findOrFail($equityAccountId);
+            $equity = $company->accounts()->where('type', 'equity')->where('is_active', true)->findOrFail($equityAccountId);
             $balances = DB::table('journal_lines as l')->join('journal_entries as j', 'j.id', '=', 'l.journal_entry_id')->join('accounts as a', 'a.id', '=', 'l.account_id')->where('j.company_id', $company->id)->where('j.financial_year_id', $year->id)->whereIn('j.status', ['posted', 'reversed'])->whereIn('a.type', ['revenue', 'expense'])->groupBy('a.id', 'a.name', 'a.type')->select('a.id', 'a.name', 'a.type', DB::raw('SUM(l.debit) debit'), DB::raw('SUM(l.credit) credit'))->get();
             $lines = [];
             $net = '0.0000';

@@ -150,6 +150,63 @@ class PeriodEndAccountantControlsTest extends TestCase
         $this->actingAs($this->user)->post(route('period-end.period.close', ['IN', $other, $year, $period]), ['reason' => 'Forged cross entity close'])->assertNotFound();
     }
 
+    public function test_lock_is_rechecked_at_posting_and_authorised_override_is_audited(): void
+    {
+        $journals = app(JournalService::class);
+        $lines = [['account_id' => $this->account('5000'), 'description' => 'Expense', 'debit' => '1000', 'credit' => '0'], ['account_id' => $this->account('2000'), 'description' => 'Accrual', 'debit' => '0', 'credit' => '1000']];
+        $standard = $journals->create($this->company, ['branch_id' => $this->branch(), 'transaction_date' => '2025-04-30', 'description' => 'Draft before lock', 'lines' => $lines], $this->user);
+        $adjustment = app(PeriodEndService::class)->adjustment($this->company, ['branch_id' => $this->branch(), 'transaction_date' => '2025-04-30', 'description' => 'Accrual before lock', 'reason' => 'Recognise the April accrual', 'lines' => $lines], $this->user);
+
+        app(AccountingLockService::class)->update($this->company, ['bookkeeping_lock_date' => '2025-04-30'], $this->user, app(AuditLogger::class));
+
+        $this->assertThrows(fn () => $journals->post($standard, $this->user), ValidationException::class);
+        $this->assertSame('draft', $standard->fresh()->status);
+        $journals->post($adjustment, $this->user);
+        $this->assertSame('posted', $adjustment->fresh()->status);
+        $this->assertDatabaseHas('audit_logs', ['company_id' => $this->company->id, 'user_id' => $this->user->id, 'event' => 'accounting_lock.overridden', 'auditable_id' => $adjustment->id]);
+    }
+
+    public function test_posting_rechecks_financial_year_state_and_filed_protection(): void
+    {
+        $year = $this->company->financialYears()->firstOrFail();
+        $journal = app(JournalService::class)->create($this->company, ['branch_id' => $this->branch(), 'transaction_date' => '2025-04-30', 'description' => 'Draft before filing', 'lines' => [['account_id' => $this->account('1000'), 'description' => 'Cash', 'debit' => '100', 'credit' => '0'], ['account_id' => $this->account('4000'), 'description' => 'Income', 'debit' => '0', 'credit' => '100']]], $this->user);
+        $year->update(['status' => 'filed']);
+
+        $this->assertThrows(fn () => app(JournalService::class)->post($journal, $this->user), ValidationException::class);
+        $this->assertSame('draft', $journal->fresh()->status);
+        $this->assertDatabaseMissing('audit_logs', ['event' => 'journal.posted', 'auditable_id' => $journal->id]);
+    }
+
+    public function test_zero_result_and_invalid_equity_fail_atomically_without_closing_journal(): void
+    {
+        $year = $this->company->financialYears()->firstOrFail();
+        foreach ($year->periods as $period) {
+            app(AccountingPeriodService::class)->close($period, 'Reviewed for zero-result close', $this->user);
+        }
+        app(FinancialYearService::class)->beginClosing($year->fresh(), 'All zero-result periods reviewed', $this->user);
+
+        $before = $this->company->journals()->count();
+        $this->assertThrows(fn () => app(YearEndClosingService::class)->close($this->company, $year->fresh(), $this->account('1000'), 'Attempt invalid non-equity close account', $this->user));
+        $this->assertThrows(fn () => app(YearEndClosingService::class)->close($this->company, $year->fresh(), $this->account('3000'), 'Zero result requires no monetary journal', $this->user), ValidationException::class);
+        $this->assertSame($before, $this->company->journals()->count());
+        $this->assertDatabaseCount('year_end_closures', 0);
+        $this->assertSame('closing', $year->fresh()->status);
+    }
+
+    public function test_legacy_period_close_route_cannot_bypass_period_end_readiness(): void
+    {
+        $year = $this->company->financialYears()->firstOrFail();
+        $period = $year->periods()->firstOrFail();
+
+        $this->actingAs($this->user)->post(route('companies.financial-years.periods.close', [$this->company, $year, $period]), [
+            'reason' => 'Attempt to bypass the closing checklist',
+            'confirmation' => 'CLOSE PERIOD',
+        ])->assertSessionHasErrors('closing');
+
+        $this->assertSame('open', $period->fresh()->status);
+        $this->assertSame(10, $period->checklistItems()->count());
+    }
+
     private function account(string $code): int
     {
         return $this->company->accounts()->where('code', $code)->value('id');
