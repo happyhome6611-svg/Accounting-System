@@ -19,7 +19,7 @@ final class DocumentNumberService
                 DB::table('document_sequences')->where('id', $row->id)->update(['next_number' => $number + 1, 'updated_at' => now()]);
             }
 
-return $prefix.'-'.str_pad((string) $number, 6, '0', STR_PAD_LEFT);
+            return $prefix.'-'.str_pad((string) $number, 6, '0', STR_PAD_LEFT);
         });
     }
 }

@@ -84,4 +84,19 @@ class Company extends Model
     {
         return $this->hasMany(SalesInvoice::class);
     }
+
+    public function suppliers()
+    {
+        return $this->hasMany(Supplier::class);
+    }
+
+    public function purchaseOrders()
+    {
+        return $this->hasMany(PurchaseOrder::class);
+    }
+
+    public function supplierBills()
+    {
+        return $this->hasMany(SupplierBill::class);
+    }
 }
