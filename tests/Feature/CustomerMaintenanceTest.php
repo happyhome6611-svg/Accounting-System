@@ -123,7 +123,7 @@ class CustomerMaintenanceTest extends TestCase
         $before = $invoice->fresh()->journal->lines()->orderBy('id')->get(['account_id', 'debit', 'credit'])->toArray();
         $this->service->update($this->company, $this->customer, $this->data(['name' => 'Renamed', 'receivable_account_id' => $this->company->accounts()->where('code', '1000')->value('id')]), $this->user);
         $after = $invoice->fresh()->journal->lines()->orderBy('id')->get(['account_id', 'debit', 'credit'])->toArray();
-        $this->assertSame($before,$after);
-        $this->assertSame('posted',$invoice->fresh()->status);
+        $this->assertSame($before, $after);
+        $this->assertSame('posted', $invoice->fresh()->status);
     }
 }

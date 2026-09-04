@@ -41,6 +41,10 @@ final class FinancialYearService
         $this->ensureEnded($year);
         $this->ensureAllPeriodsClosed($year);
         $this->ensureEarlierYearsComplete($year);
+        $hasProfitAndLossActivity = DB::table('journal_lines as line')->join('journal_entries as journal', 'journal.id', '=', 'line.journal_entry_id')->join('accounts as account', 'account.id', '=', 'line.account_id')->where('journal.financial_year_id', $year->id)->whereIn('journal.status', ['posted', 'reversed'])->whereIn('account.type', ['revenue', 'expense'])->exists();
+        if ($hasProfitAndLossActivity && ! DB::table('year_end_closures')->where('financial_year_id', $year->id)->exists()) {
+            throw ValidationException::withMessages(['status' => 'Complete the Year-End Closing Journal before closing a Financial Year with Profit and Loss activity.']);
+        }
 
         return DB::transaction(function () use ($year, $reason, $user) {
             $year->update(['status' => 'closed', 'closed_at' => now(), 'closed_by' => $user->id, 'updated_by' => $user->id]);
@@ -58,6 +62,12 @@ final class FinancialYearService
         $this->ensureEnded($year);
         $this->ensureAllPeriodsClosed($year);
         $this->ensureEarlierYearsComplete($year);
+        if (DB::table('journal_entries')->where('financial_year_id', $year->id)->where('status', 'draft')->exists()) {
+            throw ValidationException::withMessages(['status' => 'All draft journals must be resolved before Financial Year closing can begin.']);
+        }
+        if (DB::table('adjustment_reversal_schedules')->where('company_id', $year->company_id)->where('status', 'scheduled')->whereDate('reversal_date', '<=', $year->ends_on)->exists()) {
+            throw ValidationException::withMessages(['status' => 'Scheduled period-end reversals remain unresolved.']);
+        }
 
         return DB::transaction(function () use ($year, $reason, $user) {
             $year->update(['status' => 'closing', 'updated_by' => $user->id]);
@@ -85,6 +95,9 @@ final class FinancialYearService
     {
         if ($year->status !== 'closed') {
             throw ValidationException::withMessages(['status' => $year->status === 'filed' ? 'A filed Financial Year cannot be reopened; use an amendment/prior-period adjustment.' : 'Only a closed Financial Year can be reopened.']);
+        }
+        if (DB::table('year_end_closures')->where('financial_year_id', $year->id)->exists()) {
+            throw ValidationException::withMessages(['status' => 'A Financial Year with a completed Year-End Closing Journal cannot be reopened automatically. Use a controlled reversal workflow.']);
         }
 
         return DB::transaction(function () use ($year, $reason, $user) {

@@ -24,6 +24,9 @@ final class CompanyDeletionService
         'supplier_credits' => 'supplier credits',
         'supplier_payments' => 'supplier payments',
         'bank_accounts' => 'bank and cash accounts',
+        'period_close_checklist_items' => 'period-end checklists',
+        'adjustment_reversal_schedules' => 'adjustment reversal schedules',
+        'year_end_closures' => 'year-end closures',
     ];
 
     public function blockers(Company $company): array

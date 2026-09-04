@@ -10,7 +10,7 @@ use Illuminate\Validation\ValidationException;
 
 final class JournalService
 {
-    public function __construct(private AuditLogger $audit, private BranchService $branches, private FinancialYearResolver $years) {}
+    public function __construct(private AuditLogger $audit, private BranchService $branches, private FinancialYearResolver $years, private AccountingLockService $locks) {}
 
     public function create(Company $company, array $data, User $user): JournalEntry
     {
@@ -18,11 +18,16 @@ final class JournalService
         if ($company->is_active === false) {
             throw ValidationException::withMessages(['company' => 'Inactive companies cannot accept new accounting transactions.']);
         }
+        $type = $data['journal_type'] ?? 'standard';
+        if (in_array($type, ['adjusting', 'reversing', 'opening_balance', 'closing', 'prior_period_adjustment', 'system_generated'], true)) {
+            $this->locks->authorize($company, $user);
+        }
+        $this->locks->assertPostingAllowed($company, $data['transaction_date'], $user, $type, $data['reason'] ?? null);
         $branch = $this->branches->resolve($company, isset($data['branch_id']) ? (int) $data['branch_id'] : null);
-        $period = $this->validateDraft($company, $data);
+        $period = $this->validateDraft($company, $data, $type !== 'closing');
 
         return DB::transaction(function () use ($company, $data, $user, $branch, $period) {
-            $journal = $company->journals()->create(['branch_id' => $branch?->id, 'financial_year_id' => $period->financial_year_id, 'accounting_period_id' => $period->id, 'journal_number' => $this->nextNumber($company), 'transaction_date' => $data['transaction_date'], 'reference' => $data['reference'] ?? null, 'description' => $data['description'], 'status' => 'draft', 'created_by' => $user->id, 'updated_by' => $user->id]);
+            $journal = $company->journals()->create(['branch_id' => $branch?->id, 'financial_year_id' => $period->financial_year_id, 'accounting_period_id' => $period->id, 'journal_number' => $this->nextNumber($company), 'transaction_date' => $data['transaction_date'], 'reference' => $data['reference'] ?? null, 'description' => $data['description'], 'journal_type' => $data['journal_type'] ?? 'standard', 'reason' => $data['reason'] ?? null, 'supporting_notes' => $data['supporting_notes'] ?? null, 'status' => 'draft', 'created_by' => $user->id, 'updated_by' => $user->id]);
             foreach ($data['lines'] as $line) {
                 $journal->lines()->create(['company_id' => $company->id, ...$line]);
             }$this->audit->log('journal.created', $journal, $company->id, $user->id, null, $journal->toArray());
@@ -35,6 +40,7 @@ final class JournalService
     {
         $this->assertAccessible($journal->company_id, $user);
         $company = Company::findOrFail($journal->company_id);
+        $this->locks->assertPostingAllowed($company, $data['transaction_date'], $user, $journal->journal_type, $data['reason'] ?? $journal->reason);
         $branch = $this->branches->resolve($company, isset($data['branch_id']) ? (int) $data['branch_id'] : null);
         $period = $this->validateDraft($company, $data);
 
@@ -78,7 +84,7 @@ final class JournalService
             $errors = [];
             if ($journal->status !== 'draft') {
                 $errors[] = 'Journal must be Draft.';
-            }if ($journal->period->status !== 'open') {
+            }if ($journal->period->status !== 'open' && $journal->journal_type !== 'closing') {
                 $errors[] = 'Accounting period is closed.';
             }if (! $journal->transaction_date->betweenIncluded($journal->period->starts_on, $journal->period->ends_on)) {
                 $errors[] = 'Journal date must fall within the accounting period.';
@@ -137,9 +143,9 @@ final class JournalService
         return 'J'.now()->format('Y').'-'.str_pad((string) (((int) $company->journals()->max('id')) + 1), 6, '0', STR_PAD_LEFT);
     }
 
-    private function validateDraft(Company $company, array $data)
+    private function validateDraft(Company $company, array $data, bool $requireOpen = true)
     {
-        $period = $this->years->resolve($company, $data['transaction_date'], isset($data['financial_year_id']) ? (int) $data['financial_year_id'] : null, isset($data['accounting_period_id']) ? (int) $data['accounting_period_id'] : null);
+        $period = $this->years->resolve($company, $data['transaction_date'], isset($data['financial_year_id']) ? (int) $data['financial_year_id'] : null, isset($data['accounting_period_id']) ? (int) $data['accounting_period_id'] : null, $requireOpen);
         if (count($data['lines']) < 2) {
             throw ValidationException::withMessages(['lines' => 'A journal requires at least two lines.']);
         }

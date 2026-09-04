@@ -9,11 +9,11 @@ class Company extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['entity_type', 'name', 'legal_name', 'individual_name', 'trading_name', 'country_id', 'base_currency_id', 'timezone', 'address', 'email', 'phone', 'registration_identifiers', 'is_active', 'accounting_configuration', 'tax_configuration', 'created_by', 'updated_by'];
+    protected $fillable = ['entity_type', 'name', 'legal_name', 'individual_name', 'trading_name', 'country_id', 'base_currency_id', 'timezone', 'address', 'email', 'phone', 'registration_identifiers', 'is_active', 'accounting_configuration', 'tax_configuration', 'bookkeeping_lock_date', 'adviser_lock_date', 'retained_earnings_account_id', 'created_by', 'updated_by'];
 
     protected function casts(): array
     {
-        return ['registration_identifiers' => 'array', 'is_active' => 'boolean', 'accounting_configuration' => 'array', 'tax_configuration' => 'array'];
+        return ['registration_identifiers' => 'array', 'is_active' => 'boolean', 'accounting_configuration' => 'array', 'tax_configuration' => 'array', 'bookkeeping_lock_date' => 'date', 'adviser_lock_date' => 'date'];
     }
 
     public function country()

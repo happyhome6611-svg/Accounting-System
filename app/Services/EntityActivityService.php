@@ -26,6 +26,9 @@ final class EntityActivityService
         'tax_filing_periods' => 'tax filing periods',
         'carry_forwards' => 'carry forwards',
         'prior_period_adjustments' => 'prior-period adjustments',
+        'period_close_checklist_items' => 'period-end checklists',
+        'adjustment_reversal_schedules' => 'adjustment reversal schedules',
+        'year_end_closures' => 'year-end closures',
     ];
 
     public function blockers(Company $company): array

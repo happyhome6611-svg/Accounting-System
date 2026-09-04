@@ -33,7 +33,7 @@
         <div class="row">
             @auth
                 <aside class="col-md-2 bg-white min-vh-100 p-3 sidebar d-flex flex-column gap-1">
-                    @foreach (['dashboard' => 'Dashboard', 'companies.index' => 'Accounting Entities', 'accounting' => 'Accounting', 'sales' => 'Sales', 'purchases' => 'Purchases', 'banking' => 'Banking', 'tax' => 'Tax', 'reports' => 'Reports', 'settings' => 'Settings'] as $route => $label)
+                    @foreach (['dashboard' => 'Dashboard', 'companies.index' => 'Accounting Entities', 'accounting' => 'Accounting', 'sales' => 'Sales', 'purchases' => 'Purchases', 'banking' => 'Banking', 'period-end' => 'Period-End', 'tax' => 'Tax', 'reports' => 'Reports', 'settings' => 'Settings'] as $route => $label)
                         <a href="{{ route($route) }}">{{ $label }}</a>
                     @endforeach
                 </aside>

@@ -10,11 +10,16 @@ class AccountingPeriod extends Model
 
     protected function casts(): array
     {
-        return ['starts_on' => 'date', 'ends_on' => 'date', 'locked_at' => 'datetime', 'reopened_at' => 'datetime'];
+        return ['starts_on' => 'date', 'ends_on' => 'date', 'locked_at' => 'datetime', 'reopened_at' => 'datetime', 'closure_snapshot' => 'array'];
     }
 
     public function financialYear()
     {
         return $this->belongsTo(FinancialYear::class);
+    }
+
+    public function checklistItems()
+    {
+        return $this->hasMany(PeriodCloseChecklistItem::class);
     }
 }

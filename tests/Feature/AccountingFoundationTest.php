@@ -59,6 +59,6 @@ class AccountingFoundationTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
         $this->assertDatabaseCount('countries', 5);
-        $this->assertDatabaseCount('currencies',7);
+        $this->assertDatabaseCount('currencies', 7);
     }
 }
