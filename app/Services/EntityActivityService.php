@@ -21,6 +21,7 @@ final class EntityActivityService
         'supplier_bills' => 'supplier bills',
         'supplier_credits' => 'supplier credits',
         'supplier_payments' => 'supplier payments',
+        'bank_accounts' => 'bank and cash accounts',
         'tax_obligations' => 'tax obligations',
         'tax_filing_periods' => 'tax filing periods',
         'carry_forwards' => 'carry forwards',

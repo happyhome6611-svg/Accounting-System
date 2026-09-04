@@ -38,12 +38,15 @@ final class DashboardService
             ->merge($this->transactionActivity('sales_credit_notes', 'credit_note_date', 'credit_note_number', 'Credit note', 'total', $company->id, $branchId, $financialYearId, $branchNames))
             ->sortByDesc('date')->take(10);
 
-        return ['cash' => (string) $cash, 'receivables' => $receivables, 'payables' => $payables, 'sales' => $sales, 'expenses' => $expenses, 'profit' => $profit, 'open_invoices' => $open->count(), 'overdue_invoices' => $open->filter(fn ($invoice) => $invoice->due_date?->isPast() && bccomp($invoice->amount_due, '0', 4) > 0)->count(), 'unpaid_bills' => $openBills->count(), 'overdue_bills' => $openBills->filter(fn ($bill) => $bill->due_date?->isPast() && bccomp($bill->amount_due, '0', 4) > 0)->count(), 'activity' => $activity];
+        $unmatchedBankRows = DB::table('bank_statement_transactions')->where('company_id', $company->id)->where('status', 'unmatched')->count();
+        $lastReconciliation = DB::table('bank_reconciliations')->where('company_id', $company->id)->where('status', 'completed')->max('statement_end_date');
+
+        return ['cash' => (string) $cash, 'receivables' => $receivables, 'payables' => $payables, 'sales' => $sales, 'expenses' => $expenses, 'profit' => $profit, 'open_invoices' => $open->count(), 'overdue_invoices' => $open->filter(fn ($invoice) => $invoice->due_date?->isPast() && bccomp($invoice->amount_due, '0', 4) > 0)->count(), 'unpaid_bills' => $openBills->count(), 'overdue_bills' => $openBills->filter(fn ($bill) => $bill->due_date?->isPast() && bccomp($bill->amount_due, '0', 4) > 0)->count(), 'unmatched_bank_rows' => $unmatchedBankRows, 'last_reconciliation' => $lastReconciliation, 'activity' => $activity];
     }
 
     public function emptyMetrics(): array
     {
-        return ['cash' => '0.0000', 'receivables' => '0.0000', 'payables' => '0.0000', 'sales' => '0.0000', 'expenses' => '0.0000', 'profit' => '0.0000', 'open_invoices' => 0, 'overdue_invoices' => 0, 'unpaid_bills' => 0, 'overdue_bills' => 0, 'activity' => collect()];
+        return ['cash' => '0.0000', 'receivables' => '0.0000', 'payables' => '0.0000', 'sales' => '0.0000', 'expenses' => '0.0000', 'profit' => '0.0000', 'open_invoices' => 0, 'overdue_invoices' => 0, 'unpaid_bills' => 0, 'overdue_bills' => 0, 'unmatched_bank_rows' => 0, 'last_reconciliation' => null, 'activity' => collect()];
     }
 
     private function transactionActivity(string $table, string $date, string $reference, string $type, string $amount, int $companyId, ?int $branchId, ?int $financialYearId, $branchNames)

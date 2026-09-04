@@ -4,6 +4,7 @@ use App\Http\Controllers\Accounting\JournalController;
 use App\Http\Controllers\Accounting\ReportController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RegisteredUserController;
+use App\Http\Controllers\BankingController;
 use App\Http\Controllers\Company\BranchController;
 use App\Http\Controllers\Company\CompanyController;
 use App\Http\Controllers\Company\FinancialYearController;
@@ -114,7 +115,26 @@ Route::middleware('auth')->group(function () {
     Route::post('/companies/{company}/purchases/{type}/{document}/post', [PurchasesController::class, 'postDocument'])->whereNumber('document')->name('purchases.documents.post');
     Route::post('/companies/{company}/purchase-orders/{order}/convert', [PurchasesController::class, 'convertOrder'])->name('purchases.orders.convert');
     Route::get('/reports/accounts-payable/{type}', [PurchasesController::class, 'report'])->name('purchases.reports');
-    foreach (['banking', 'tax', 'settings'] as $module) {
+    Route::get('/banking', [BankingController::class, 'index'])->name('banking');
+    Route::get('/banking/{country}', [BankingController::class, 'country'])->name('banking.country');
+    Route::get('/banking/{country}/entities/{company}/accounts', [BankingController::class, 'accounts'])->name('banking.accounts');
+    Route::post('/banking/{country}/entities/{company}/accounts', [BankingController::class, 'storeAccount'])->name('banking.accounts.store');
+    Route::put('/banking/{country}/entities/{company}/accounts/{account}', [BankingController::class, 'updateAccount'])->name('banking.accounts.update');
+    Route::patch('/banking/{country}/entities/{company}/accounts/{account}/status', [BankingController::class, 'status'])->name('banking.accounts.status');
+    Route::delete('/banking/{country}/entities/{company}/accounts/{account}', [BankingController::class, 'destroy'])->name('banking.accounts.destroy');
+    Route::get('/banking/{country}/entities/{company}/accounts/{account}/register', [BankingController::class, 'register'])->name('banking.register');
+    Route::get('/banking/{country}/entities/{company}/transactions/create', [BankingController::class, 'createTransaction'])->name('banking.transactions.create');
+    Route::post('/banking/{country}/entities/{company}/transactions', [BankingController::class, 'storeTransaction'])->name('banking.transactions.store');
+    Route::get('/banking/{country}/entities/{company}/accounts/{account}/imports', [BankingController::class, 'imports'])->name('banking.imports');
+    Route::post('/banking/{country}/entities/{company}/accounts/{account}/imports/preview', [BankingController::class, 'preview'])->name('banking.imports.preview');
+    Route::post('/banking/{country}/entities/{company}/accounts/{account}/imports', [BankingController::class, 'confirmImport'])->name('banking.imports.confirm');
+    Route::get('/banking/{country}/entities/{company}/accounts/{account}/matching', [BankingController::class, 'matching'])->name('banking.matching');
+    Route::post('/banking/{country}/entities/{company}/accounts/{account}/matching/{row}', [BankingController::class, 'match'])->name('banking.match');
+    Route::post('/banking/{country}/entities/{company}/accounts/{account}/matching/{row}/create', [BankingController::class, 'createFromStatement'])->name('banking.match.create');
+    Route::get('/banking/{country}/entities/{company}/accounts/{account}/reconciliations', [BankingController::class, 'reconciliations'])->name('banking.reconciliations');
+    Route::post('/banking/{country}/entities/{company}/accounts/{account}/reconciliations', [BankingController::class, 'storeReconciliation'])->name('banking.reconciliations.store');
+    Route::post('/banking/{country}/entities/{company}/accounts/{account}/reconciliations/{reconciliation}/complete', [BankingController::class, 'completeReconciliation'])->name('banking.reconciliations.complete');
+    foreach (['tax', 'settings'] as $module) {
         Route::view("/{$module}", 'coming-soon.index', ['module' => ucfirst($module)])->name($module);
     }
 });

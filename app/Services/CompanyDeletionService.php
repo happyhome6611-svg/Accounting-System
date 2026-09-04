@@ -23,6 +23,7 @@ final class CompanyDeletionService
         'supplier_bills' => 'supplier bills',
         'supplier_credits' => 'supplier credits',
         'supplier_payments' => 'supplier payments',
+        'bank_accounts' => 'bank and cash accounts',
     ];
 
     public function blockers(Company $company): array
