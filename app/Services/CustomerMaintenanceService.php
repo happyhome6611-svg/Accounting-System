@@ -18,7 +18,7 @@ final class CustomerMaintenanceService
         'customer_receipts' => 'customer receipts',
     ];
 
-    public function __construct(private AuditLogger $audit) {}
+    public function __construct(private AuditLogger $audit, private TaxDefaultService $taxDefaults) {}
 
     public function blockers(Customer $customer): array
     {
@@ -34,6 +34,7 @@ final class CustomerMaintenanceService
     {
         $this->authorize($company, $customer, $user);
         $company->accounts()->findOrFail($data['receivable_account_id']);
+        $this->taxDefaults->validate($company, $data['default_sales_tax_code_id'] ?? null);
 
         return DB::transaction(function () use ($company, $customer, $data, $user) {
             $old = $customer->toArray();

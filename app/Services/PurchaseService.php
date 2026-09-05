@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 
 final class PurchaseService
 {
-    public function __construct(private DocumentNumberService $numbers, private BranchService $branches, private FinancialYearResolver $years, private JournalService $journals, private AuditLogger $audit, private AccountingLockService $locks, private TaxCalculationService $tax) {}
+    public function __construct(private DocumentNumberService $numbers, private BranchService $branches, private FinancialYearResolver $years, private JournalService $journals, private AuditLogger $audit, private AccountingLockService $locks, private TaxCalculationService $tax, private TaxDefaultService $taxDefaults) {}
 
     public function create(Company $company, string $type, array $data, User $user): Model
     {
@@ -46,8 +46,11 @@ final class PurchaseService
         $period = $this->years->resolve($company, $data[$dateField], $data['financial_year_id'] ?? null, $data['accounting_period_id'] ?? null, $type !== 'orders');
         $branch = $this->branches->resolve($company, $data['branch_id'] ?? null);
         $supplier = $company->suppliers()->where('is_active', true)->findOrFail($data['supplier_id']);
-        $lines = collect($data['lines'])->map(function ($line) use ($company, $data, $dateField, $type) {
+        $lines = collect($data['lines'])->map(function ($line) use ($company, $data, $dateField, $type, $supplier) {
             $net = $this->lineAmount($line);
+            if ($type !== 'orders') {
+                $line['tax_code_id'] = $this->taxDefaults->purchase($company, $line, $supplier, $data[$dateField]);
+            }
             if ($type === 'orders' || empty($line['tax_code_id'])) {
                 return [...$line, 'line_amount' => $net, 'tax_amount' => '0.0000'];
             }
@@ -174,6 +177,18 @@ final class PurchaseService
             if ($document->status !== 'draft') {
                 throw ValidationException::withMessages(['document' => 'Document must be Draft.']);
             }
+            $taxSnapshots = collect();
+            if (in_array($type, ['bills', 'credits'], true)) {
+                $taxDate = $type === 'bills' ? $document->bill_date : $document->credit_date;
+                $taxSnapshots = $document->lines->whereNotNull('tax_code_id')->mapWithKeys(function ($line) use ($company, $taxDate) {
+                    $result = $this->tax->snapshotForPosting($company, $line->tax_code_id, $taxDate->toDateString(), bcadd($line->line_amount, $line->tax_amount, 4));
+                    if (bccomp($result['net'], $line->line_amount, 4) !== 0 || bccomp($result['tax'], $line->tax_amount, 4) !== 0) {
+                        throw ValidationException::withMessages(['tax' => 'Tax configuration changed after this draft was calculated. Re-save the draft before posting.']);
+                    }
+
+                    return [$line->id => $result];
+                });
+            }
             if ($type === 'credits') {
                 $bill = SupplierBill::where('company_id', $company->id)
                     ->where('supplier_id', $document->supplier_id)
@@ -196,7 +211,7 @@ final class PurchaseService
             if ($type === 'bills') {
                 $lines = $document->lines->groupBy('expense_account_id')->map(fn ($rows, $account) => ['account_id' => $account, 'description' => $document->bill_number, 'debit' => $rows->sum('line_amount'), 'credit' => '0'])->values()->all();
                 if (bccomp($document->tax_amount, '0', 4) > 0) {
-                    $control = $company->taxSetting?->input_tax_account_id;
+                    $control = $company->taxSetting()->value('input_tax_account_id');
                     if (! $control) {
                         throw ValidationException::withMessages(['tax' => 'Configure an Input Tax Control Account before posting taxable purchases.']);
                     }
@@ -208,7 +223,7 @@ final class PurchaseService
             } elseif ($type === 'credits') {
                 $lines = $document->lines->groupBy('expense_account_id')->map(fn ($rows, $account) => ['account_id' => $account, 'description' => $document->credit_number, 'debit' => '0', 'credit' => $rows->sum('line_amount')])->values()->all();
                 if (bccomp((string) ($document->tax_amount ?? 0), '0', 4) > 0) {
-                    $control = $company->taxSetting?->input_tax_account_id;
+                    $control = $company->taxSetting()->value('input_tax_account_id');
                     if (! $control) {
                         throw ValidationException::withMessages(['tax' => 'Configure an Input Tax Control Account before posting taxable credits.']);
                     }
@@ -228,7 +243,7 @@ final class PurchaseService
             $this->journals->post($journal, $user);
             if (in_array($type, ['bills', 'credits'], true)) {
                 foreach ($document->lines->whereNotNull('tax_code_id') as $line) {
-                    $result = $this->tax->calculate($company, $line->tax_code_id, $date->toDateString(), bcadd($line->line_amount, $line->tax_amount, 4), true);
+                    $result = $taxSnapshots[$line->id];
                     $sign = $type === 'credits' ? '-1' : '1';
                     TransactionTaxLine::create(['company_id' => $company->id, 'country_id' => $result['country_id'], 'tax_registration_id' => $result['tax_registration_id'], 'tax_period_id' => $result['tax_period_id'], 'tax_code_id' => $result['tax_code_id'], 'journal_entry_id' => $journal->id, 'source_type' => $document::class, 'source_id' => $document->id, 'source_line_type' => $line::class, 'source_line_id' => $line->id, 'direction' => 'input', 'transaction_date' => $date, 'tax_code_snapshot' => $result['tax_code'], 'tax_type_snapshot' => $result['tax_type'], 'treatment_snapshot' => $result['treatment'], 'registration_number_snapshot' => $result['registration_number'], 'rate_snapshot' => $result['rate'], 'net_amount' => bcmul($line->line_amount, $sign, 4), 'tax_amount' => bcmul($line->tax_amount, $sign, 4), 'gross_amount' => bcmul(bcadd($line->line_amount, $line->tax_amount, 4), $sign, 4)]);
                 }

@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 
 final class SalesWorkflowService
 {
-    public function __construct(private SalesService $sales, private DocumentNumberService $numbers, private BranchService $branches, private AuditLogger $audit, private FinancialYearResolver $years, private AccountingLockService $locks, private TaxCalculationService $tax) {}
+    public function __construct(private SalesService $sales, private DocumentNumberService $numbers, private BranchService $branches, private AuditLogger $audit, private FinancialYearResolver $years, private AccountingLockService $locks, private TaxCalculationService $tax, private TaxDefaultService $taxDefaults) {}
 
     public function create(Company $company, string $type, array $data, User $user): Model
     {
@@ -117,8 +117,11 @@ final class SalesWorkflowService
         $lines = $data['lines'];
         unset($data['lines']);
         $this->validateLines($company, $lines);
-        $calculated = collect($lines)->map(function ($line) use ($company, $data, $dateField, $document) {
+        $calculated = collect($lines)->map(function ($line) use ($company, $data, $dateField, $document, $customer) {
             $net = $this->lineAmount($line);
+            if ($document instanceof SalesInvoice) {
+                $line['tax_code_id'] = $this->taxDefaults->sales($company, $line, $customer, $data[$dateField]);
+            }
             $result = $document instanceof SalesInvoice && ! empty($line['tax_code_id'])
                 ? $this->tax->calculate($company, (int) $line['tax_code_id'], $data[$dateField], $net, (bool) ($line['tax_inclusive'] ?? false))
                 : null;
@@ -159,8 +162,9 @@ final class SalesWorkflowService
         $invoice = $company->salesInvoices()->where('customer_id', $customer->id)->whereIn('status', ['posted', 'partially_paid', 'paid'])->findOrFail($data['sales_invoice_id']);
         $lines = $data['lines'];
         $this->validateLines($company, $lines);
-        $calculated = collect($lines)->map(function ($line) use ($company, $data) {
+        $calculated = collect($lines)->map(function ($line) use ($company, $data, $customer) {
             $net = $this->lineAmount($line);
+            $line['tax_code_id'] = $this->taxDefaults->sales($company, $line, $customer, $data['credit_note_date']);
             $result = ! empty($line['tax_code_id']) ? $this->tax->calculate($company, (int) $line['tax_code_id'], $data['credit_note_date'], $net, (bool) ($line['tax_inclusive'] ?? false)) : null;
 
             return [...$line, 'line_amount' => $result['net'] ?? $net, 'tax_amount' => $result['tax'] ?? '0.0000'];

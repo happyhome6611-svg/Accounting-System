@@ -223,7 +223,7 @@ class PurchasesController extends Controller
 
     private function supplierRules(Company $c, ?Supplier $s = null): array
     {
-        return ['code' => ['nullable', 'string', 'max:40', Rule::unique('suppliers')->where('company_id', $c->id)->ignore($s?->id)], 'name' => 'required|string|max:255', 'legal_name' => 'nullable|string|max:255', 'type' => ['required', Rule::in(['business', 'individual', 'contractor', 'other'])], 'email' => 'nullable|email', 'phone' => 'nullable|string|max:40', 'address' => 'nullable|string', 'country_id' => 'nullable|exists:countries,id', 'currency_id' => 'required|integer', 'payment_terms_days' => 'required|integer|min:0', 'credit_limit' => 'required|numeric|min:0', 'payable_account_id' => 'required|integer', 'notes' => 'nullable|string', 'is_active' => 'sometimes|boolean'];
+        return ['code' => ['nullable', 'string', 'max:40', Rule::unique('suppliers')->where('company_id', $c->id)->ignore($s?->id)], 'name' => 'required|string|max:255', 'legal_name' => 'nullable|string|max:255', 'type' => ['required', Rule::in(['business', 'individual', 'contractor', 'other'])], 'email' => 'nullable|email', 'phone' => 'nullable|string|max:40', 'address' => 'nullable|string', 'country_id' => 'nullable|exists:countries,id', 'currency_id' => 'required|integer', 'payment_terms_days' => 'required|integer|min:0', 'credit_limit' => 'required|numeric|min:0', 'payable_account_id' => 'required|integer', 'notes' => 'nullable|string', 'is_active' => 'sometimes|boolean', 'default_purchase_tax_code_id' => 'nullable|integer'];
     }
 
     private function formData(Company $c, string $t): array

@@ -19,4 +19,19 @@ class TransactionTaxLine extends Model
         static::updating(fn () => throw new LogicException('Posted transaction tax snapshots are immutable.'));
         static::deleting(fn () => throw new LogicException('Posted transaction tax snapshots cannot be deleted.'));
     }
+
+    public function registration()
+    {
+        return $this->belongsTo(TaxRegistration::class, 'tax_registration_id');
+    }
+
+    public function period()
+    {
+        return $this->belongsTo(TaxPeriod::class, 'tax_period_id');
+    }
+
+    public function source()
+    {
+        return $this->morphTo(__FUNCTION__, 'source_type', 'source_id');
+    }
 }

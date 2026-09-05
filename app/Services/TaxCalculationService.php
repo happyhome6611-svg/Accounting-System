@@ -42,11 +42,21 @@ final class TaxCalculationService
         }
         $period = TaxPeriod::where('company_id', $company->id)->where('tax_obligation_id', $registration->id)
             ->whereDate('starts_on', '<=', $date)->whereDate('ends_on', '>=', $date)->first();
-        if ($period && $period->status === 'filed') {
-            throw ValidationException::withMessages(['tax_period' => 'The resolved Tax Period is Filed and cannot accept new tax transactions.']);
+        if ($period && in_array($period->status, ['prepared', 'filed'], true)) {
+            throw ValidationException::withMessages(['tax_period' => 'The resolved Tax Period is protected and cannot accept new tax transactions.']);
         }
 
         return ['tax_code_id' => $code->id, 'tax_registration_id' => $registration->id, 'tax_period_id' => $period?->id, 'country_id' => $company->country_id, 'tax_code' => $code->code, 'tax_type' => $code->tax_type, 'treatment' => $code->treatment, 'registration_number' => $registration->registration_number, 'rate' => $rateValue, 'net' => $net, 'tax' => $tax, 'gross' => $gross, 'inclusive' => $inclusive];
+    }
+
+    public function snapshotForPosting(Company $company, int $taxCodeId, string $date, string $grossAmount): array
+    {
+        $result = $this->calculate($company, $taxCodeId, $date, $grossAmount, true);
+        if (! $result['tax_period_id']) {
+            throw ValidationException::withMessages(['tax_period' => 'Generate an Open Tax Period covering the transaction date before posting.']);
+        }
+
+        return $result;
     }
 
     private function round(string $value): string

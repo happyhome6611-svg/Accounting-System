@@ -10,13 +10,14 @@ use Illuminate\Validation\ValidationException;
 
 final class SupplierMaintenanceService
 {
-    public function __construct(private DocumentNumberService $numbers, private AuditLogger $audit) {}
+    public function __construct(private DocumentNumberService $numbers, private AuditLogger $audit, private TaxDefaultService $taxDefaults) {}
 
     public function create(Company $company, array $data, User $user): Supplier
     {
         $this->access($company, $user);
         $this->validateAccount($company, $data['payable_account_id']);
         $this->validateCurrency($company, $data['currency_id']);
+        $this->taxDefaults->validate($company, $data['default_purchase_tax_code_id'] ?? null);
         $supplier = $company->suppliers()->create([...$data, 'code' => $data['code'] ?: $this->numbers->next($company, 'supplier', 'SUP'), 'created_by' => $user->id, 'updated_by' => $user->id]);
         $this->audit->log('supplier.created', $supplier, $company->id, $user->id);
 
@@ -28,6 +29,7 @@ final class SupplierMaintenanceService
         $this->access($company, $user, $supplier);
         $this->validateAccount($company, $data['payable_account_id']);
         $this->validateCurrency($company, $data['currency_id']);
+        $this->taxDefaults->validate($company, $data['default_purchase_tax_code_id'] ?? null);
         $old = $supplier->toArray();
         $supplier->update([...$data, 'updated_by' => $user->id]);
         $this->audit->log('supplier.updated', $supplier, $company->id, $user->id, $old, $supplier->fresh()->toArray());

@@ -157,8 +157,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/tax/{country}/entities/{company}/summary', [TaxController::class, 'workspace'])->name('tax.summary');
     Route::get('/tax/{country}/entities/{company}/adjustments', [TaxController::class, 'workspace'])->name('tax.adjustments');
     Route::post('/tax/{country}/entities/{company}/registrations', [TaxController::class, 'storeRegistration'])->name('tax.registrations.store');
+    Route::get('/tax/{country}/entities/{company}/registrations/{registration}/edit', [TaxController::class, 'editRegistration'])->name('tax.registrations.edit');
+    Route::put('/tax/{country}/entities/{company}/registrations/{registration}', [TaxController::class, 'updateRegistration'])->name('tax.registrations.update');
     Route::post('/tax/{country}/entities/{company}/codes', [TaxController::class, 'storeCode'])->name('tax.codes.store');
+    Route::get('/tax/{country}/entities/{company}/codes/{code}/edit', [TaxController::class, 'editCode'])->name('tax.codes.edit');
+    Route::put('/tax/{country}/entities/{company}/codes/{code}', [TaxController::class, 'updateCode'])->name('tax.codes.update');
     Route::post('/tax/{country}/entities/{company}/codes/{code}/rates', [TaxController::class, 'storeRate'])->name('tax.rates.store');
+    Route::get('/tax/{country}/entities/{company}/codes/{code}/rates/{rate}/edit', [TaxController::class, 'editRate'])->name('tax.rates.edit');
+    Route::put('/tax/{country}/entities/{company}/codes/{code}/rates/{rate}', [TaxController::class, 'updateRate'])->name('tax.rates.update');
     Route::put('/tax/{country}/entities/{company}/settings', [TaxController::class, 'settings'])->name('tax.settings.update');
     Route::post('/tax/{country}/entities/{company}/registrations/{registration}/periods', [TaxController::class, 'generatePeriods'])->name('tax.periods.generate');
     Route::post('/tax/{country}/entities/{company}/periods/{period}/prepare', [TaxController::class, 'preparePeriod'])->name('tax.periods.prepare');
