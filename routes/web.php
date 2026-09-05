@@ -15,6 +15,7 @@ use App\Http\Controllers\Purchases\PurchasesController;
 use App\Http\Controllers\Sales\ReceivablesController;
 use App\Http\Controllers\Sales\SalesController;
 use App\Http\Controllers\Sales\SalesTransactionController;
+use App\Http\Controllers\TaxController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
@@ -147,7 +148,23 @@ Route::middleware('auth')->group(function () {
     Route::get('/banking/{country}/entities/{company}/accounts/{account}/reconciliations', [BankingController::class, 'reconciliations'])->name('banking.reconciliations');
     Route::post('/banking/{country}/entities/{company}/accounts/{account}/reconciliations', [BankingController::class, 'storeReconciliation'])->name('banking.reconciliations.store');
     Route::post('/banking/{country}/entities/{company}/accounts/{account}/reconciliations/{reconciliation}/complete', [BankingController::class, 'completeReconciliation'])->name('banking.reconciliations.complete');
-    foreach (['tax', 'settings'] as $module) {
+    Route::get('/tax', [TaxController::class, 'index'])->name('tax');
+    Route::get('/tax/{country}', [TaxController::class, 'country'])->name('tax.country');
+    Route::get('/tax/{country}/entities/{company}', [TaxController::class, 'workspace'])->name('tax.workspace');
+    Route::get('/tax/{country}/entities/{company}/register', [TaxController::class, 'workspace'])->name('tax.register');
+    Route::get('/tax/{country}/entities/{company}/output-tax', [TaxController::class, 'workspace'])->name('tax.output');
+    Route::get('/tax/{country}/entities/{company}/input-tax', [TaxController::class, 'workspace'])->name('tax.input');
+    Route::get('/tax/{country}/entities/{company}/summary', [TaxController::class, 'workspace'])->name('tax.summary');
+    Route::get('/tax/{country}/entities/{company}/adjustments', [TaxController::class, 'workspace'])->name('tax.adjustments');
+    Route::post('/tax/{country}/entities/{company}/registrations', [TaxController::class, 'storeRegistration'])->name('tax.registrations.store');
+    Route::post('/tax/{country}/entities/{company}/codes', [TaxController::class, 'storeCode'])->name('tax.codes.store');
+    Route::post('/tax/{country}/entities/{company}/codes/{code}/rates', [TaxController::class, 'storeRate'])->name('tax.rates.store');
+    Route::put('/tax/{country}/entities/{company}/settings', [TaxController::class, 'settings'])->name('tax.settings.update');
+    Route::post('/tax/{country}/entities/{company}/registrations/{registration}/periods', [TaxController::class, 'generatePeriods'])->name('tax.periods.generate');
+    Route::post('/tax/{country}/entities/{company}/periods/{period}/prepare', [TaxController::class, 'preparePeriod'])->name('tax.periods.prepare');
+    Route::post('/tax/{country}/entities/{company}/periods/{period}/file', [TaxController::class, 'filePeriod'])->name('tax.periods.file');
+    Route::post('/tax/{country}/entities/{company}/adjustments', [TaxController::class, 'adjustment'])->name('tax.adjustments.store');
+    foreach (['settings'] as $module) {
         Route::view("/{$module}", 'coming-soon.index', ['module' => ucfirst($module)])->name($module);
     }
 });

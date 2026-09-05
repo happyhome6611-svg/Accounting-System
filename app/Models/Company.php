@@ -104,4 +104,24 @@ class Company extends Model
     {
         return $this->hasMany(BankAccount::class);
     }
+
+    public function taxRegistrations()
+    {
+        return $this->hasMany(TaxRegistration::class);
+    }
+
+    public function taxCodes()
+    {
+        return $this->hasMany(TaxCode::class);
+    }
+
+    public function taxSetting()
+    {
+        return $this->hasOne(TaxSetting::class);
+    }
+
+    public function transactionTaxLines()
+    {
+        return $this->hasMany(TransactionTaxLine::class);
+    }
 }

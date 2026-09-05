@@ -7,6 +7,7 @@ use App\Models\PurchaseOrder;
 use App\Models\SupplierBill;
 use App\Models\SupplierCredit;
 use App\Models\SupplierPayment;
+use App\Models\TransactionTaxLine;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -14,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 
 final class PurchaseService
 {
-    public function __construct(private DocumentNumberService $numbers, private BranchService $branches, private FinancialYearResolver $years, private JournalService $journals, private AuditLogger $audit, private AccountingLockService $locks) {}
+    public function __construct(private DocumentNumberService $numbers, private BranchService $branches, private FinancialYearResolver $years, private JournalService $journals, private AuditLogger $audit, private AccountingLockService $locks, private TaxCalculationService $tax) {}
 
     public function create(Company $company, string $type, array $data, User $user): Model
     {
@@ -45,9 +46,19 @@ final class PurchaseService
         $period = $this->years->resolve($company, $data[$dateField], $data['financial_year_id'] ?? null, $data['accounting_period_id'] ?? null, $type !== 'orders');
         $branch = $this->branches->resolve($company, $data['branch_id'] ?? null);
         $supplier = $company->suppliers()->where('is_active', true)->findOrFail($data['supplier_id']);
-        $lines = $data['lines'];
+        $lines = collect($data['lines'])->map(function ($line) use ($company, $data, $dateField, $type) {
+            $net = $this->lineAmount($line);
+            if ($type === 'orders' || empty($line['tax_code_id'])) {
+                return [...$line, 'line_amount' => $net, 'tax_amount' => '0.0000'];
+            }
+            $result = $this->tax->calculate($company, (int) $line['tax_code_id'], $data[$dateField], $net, (bool) ($line['tax_inclusive'] ?? false));
+
+            return [...$line, 'line_amount' => $result['net'], 'tax_amount' => $result['tax']];
+        })->all();
         $this->validateLines($company, $lines);
-        $total = $this->total($lines);
+        $subtotal = collect($lines)->reduce(fn ($sum, $line) => bcadd($sum, $line['line_amount'], 4), '0.0000');
+        $tax = collect($lines)->reduce(fn ($sum, $line) => bcadd($sum, $line['tax_amount'], 4), '0.0000');
+        $total = bcadd($subtotal, $tax, 4);
         if ($type === 'credits') {
             $bill = $company->supplierBills()->where('supplier_id', $supplier->id)->whereIn('status', ['posted', 'partially_paid', 'paid'])->lockForUpdate()->findOrFail($data['supplier_bill_id']);
             if (bccomp($total, $bill->amount_due, 4) > 0) {
@@ -55,7 +66,7 @@ final class PurchaseService
             }
         }
 
-        return DB::transaction(function () use ($company, $document, $type, $data, $user, $period, $branch, $supplier, $lines, $total) {
+        return DB::transaction(function () use ($company, $document, $type, $data, $user, $period, $branch, $supplier, $lines, $subtotal, $tax, $total) {
             $values = ['company_id' => $company->id, 'supplier_id' => $supplier->id, 'branch_id' => $branch->id, 'financial_year_id' => $period->financial_year_id, 'currency_id' => $company->base_currency_id, 'status' => 'draft', 'updated_by' => $user->id];
             if ($type !== 'orders') {
                 $values['accounting_period_id'] = $period->id;
@@ -66,12 +77,15 @@ final class PurchaseService
                 }
             }
             if ($type === 'orders' || $type === 'bills') {
-                $values['subtotal'] = $total;
+                $values['subtotal'] = $subtotal;
                 if ($type === 'bills') {
-                    $values['tax_amount'] = 0;
+                    $values['tax_amount'] = $tax;
                     $values['amount_paid'] = $document->amount_paid ?? 0;
                     $values['amount_credited'] = $document->amount_credited ?? 0;
                 }
+            }
+            if ($type === 'credits') {
+                $values['tax_amount'] = $tax;
             }
             $values['total'] = $total;
             if (! $document->exists) {
@@ -88,7 +102,10 @@ final class PurchaseService
                 $document->lines()->delete();
             }
             foreach ($lines as $line) {
-                $document->lines()->create([...$line, 'line_amount' => $this->lineAmount($line), ...($type === 'bills' ? ['tax_amount' => 0] : [])]);
+                if ($type === 'orders') {
+                    unset($line['tax_amount'], $line['tax_code_id'], $line['tax_inclusive']);
+                }
+                $document->lines()->create($line);
             }
             $this->audit->log('purchase_'.$type.'.'.($document->wasRecentlyCreated ? 'created' : 'updated'), $document, $company->id, $user->id);
 
@@ -178,11 +195,25 @@ final class PurchaseService
             }
             if ($type === 'bills') {
                 $lines = $document->lines->groupBy('expense_account_id')->map(fn ($rows, $account) => ['account_id' => $account, 'description' => $document->bill_number, 'debit' => $rows->sum('line_amount'), 'credit' => '0'])->values()->all();
+                if (bccomp($document->tax_amount, '0', 4) > 0) {
+                    $control = $company->taxSetting?->input_tax_account_id;
+                    if (! $control) {
+                        throw ValidationException::withMessages(['tax' => 'Configure an Input Tax Control Account before posting taxable purchases.']);
+                    }
+                    $lines[] = ['account_id' => $control, 'description' => $document->bill_number.' input tax', 'debit' => $document->tax_amount, 'credit' => '0'];
+                }
                 $journalLines = [...$lines, ['account_id' => $document->supplier->payable_account_id, 'description' => $document->bill_number, 'debit' => '0', 'credit' => $document->total]];
                 $reference = $document->bill_number;
                 $date = $document->bill_date;
             } elseif ($type === 'credits') {
                 $lines = $document->lines->groupBy('expense_account_id')->map(fn ($rows, $account) => ['account_id' => $account, 'description' => $document->credit_number, 'debit' => '0', 'credit' => $rows->sum('line_amount')])->values()->all();
+                if (bccomp((string) ($document->tax_amount ?? 0), '0', 4) > 0) {
+                    $control = $company->taxSetting?->input_tax_account_id;
+                    if (! $control) {
+                        throw ValidationException::withMessages(['tax' => 'Configure an Input Tax Control Account before posting taxable credits.']);
+                    }
+                    $lines[] = ['account_id' => $control, 'description' => $document->credit_number.' input tax', 'debit' => '0', 'credit' => $document->tax_amount];
+                }
                 $journalLines = [['account_id' => $document->supplier->payable_account_id, 'description' => $document->credit_number, 'debit' => $document->total, 'credit' => '0'], ...$lines];
                 $reference = $document->credit_number;
                 $date = $document->credit_date;
@@ -195,6 +226,13 @@ final class PurchaseService
             }
             $journal = $this->journals->create($company, ['branch_id' => $document->branch_id, 'financial_year_id' => $document->financial_year_id, 'accounting_period_id' => $document->accounting_period_id, 'transaction_date' => $date->toDateString(), 'reference' => $reference, 'description' => ucfirst(str_replace('_', ' ', $type)).' '.$reference, 'lines' => $journalLines], $user);
             $this->journals->post($journal, $user);
+            if (in_array($type, ['bills', 'credits'], true)) {
+                foreach ($document->lines->whereNotNull('tax_code_id') as $line) {
+                    $result = $this->tax->calculate($company, $line->tax_code_id, $date->toDateString(), bcadd($line->line_amount, $line->tax_amount, 4), true);
+                    $sign = $type === 'credits' ? '-1' : '1';
+                    TransactionTaxLine::create(['company_id' => $company->id, 'country_id' => $result['country_id'], 'tax_registration_id' => $result['tax_registration_id'], 'tax_period_id' => $result['tax_period_id'], 'tax_code_id' => $result['tax_code_id'], 'journal_entry_id' => $journal->id, 'source_type' => $document::class, 'source_id' => $document->id, 'source_line_type' => $line::class, 'source_line_id' => $line->id, 'direction' => 'input', 'transaction_date' => $date, 'tax_code_snapshot' => $result['tax_code'], 'tax_type_snapshot' => $result['tax_type'], 'treatment_snapshot' => $result['treatment'], 'registration_number_snapshot' => $result['registration_number'], 'rate_snapshot' => $result['rate'], 'net_amount' => bcmul($line->line_amount, $sign, 4), 'tax_amount' => bcmul($line->tax_amount, $sign, 4), 'gross_amount' => bcmul(bcadd($line->line_amount, $line->tax_amount, 4), $sign, 4)]);
+                }
+            }
             if ($type === 'credits') {
                 $credited = bcadd($bill->amount_credited, $document->total, 4);
                 $this->write(fn () => $bill->update(['amount_credited' => $credited, 'status' => $this->billStatus($bill->total, $bill->amount_paid, $credited)]));

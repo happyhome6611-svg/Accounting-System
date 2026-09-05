@@ -228,7 +228,7 @@ class PurchasesController extends Controller
 
     private function formData(Company $c, string $t): array
     {
-        return ['company' => $c->load('baseCurrency'), 'type' => $t, 'title' => self::TYPES[$t][1], 'suppliers' => $c->suppliers()->where('is_active', true)->get(), 'branches' => $c->branches()->where('is_active', true)->get(), 'items' => $c->items()->where('is_active', true)->get(), 'accounts' => $c->accounts()->where('is_active', true)->whereIn('type', ['expense', 'asset'])->get(), 'years' => $c->financialYears()->with('periods')->get(), 'bills' => $c->supplierBills()->whereIn('status', ['posted', 'partially_paid'])->with('supplier')->get()];
+        return ['company' => $c->load('baseCurrency'), 'type' => $t, 'title' => self::TYPES[$t][1], 'suppliers' => $c->suppliers()->where('is_active', true)->get(), 'branches' => $c->branches()->where('is_active', true)->get(), 'items' => $c->items()->where('is_active', true)->get(), 'accounts' => $c->accounts()->where('is_active', true)->whereIn('type', ['expense', 'asset'])->get(), 'taxCodes' => $c->taxCodes()->where('is_active', true)->orderBy('code')->get(), 'years' => $c->financialYears()->with('periods')->get(), 'bills' => $c->supplierBills()->whereIn('status', ['posted', 'partially_paid'])->with('supplier')->get()];
     }
 
     private function rules(string $t): array
@@ -236,7 +236,7 @@ class PurchasesController extends Controller
         $common = ['supplier_id' => 'required|integer', 'branch_id' => 'nullable|integer', 'financial_year_id' => 'nullable|integer'];
         if ($t === 'payments') {
             return $common + ['accounting_period_id' => 'nullable|integer', 'payment_date' => 'required|date', 'payment_account_id' => 'required|integer', 'amount' => 'required|numeric|min:0.0001', 'reference' => 'nullable|string', 'notes' => 'nullable|string', 'allocations' => 'required|array|min:1', 'allocations.*.supplier_bill_id' => 'required|integer', 'allocations.*.amount' => 'required|numeric|min:0'];
-        }$lines = ['lines' => 'required|array|min:1', 'lines.*.item_id' => 'nullable|integer', 'lines.*.expense_account_id' => 'required|integer', 'lines.*.description' => 'required|string', 'lines.*.quantity' => 'required|numeric|min:0.0001', 'lines.*.unit_price' => 'required|numeric|min:0', 'lines.*.discount' => 'nullable|numeric|min:0'];
+        }$lines = ['lines' => 'required|array|min:1', 'lines.*.item_id' => 'nullable|integer', 'lines.*.expense_account_id' => 'required|integer', 'lines.*.description' => 'required|string', 'lines.*.quantity' => 'required|numeric|min:0.0001', 'lines.*.unit_price' => 'required|numeric|min:0', 'lines.*.discount' => 'nullable|numeric|min:0', 'lines.*.tax_code_id' => 'nullable|integer', 'lines.*.tax_inclusive' => 'nullable|boolean'];
 
         return match ($t) {
             'orders' => $common + ['order_date' => 'required|date', 'expected_date' => 'nullable|date|after_or_equal:order_date', 'supplier_reference' => 'nullable|string', 'notes' => 'nullable|string'] + $lines,'bills' => $common + ['accounting_period_id' => 'nullable|integer', 'bill_date' => 'required|date', 'due_date' => 'required|date|after_or_equal:bill_date', 'purchase_order_id' => 'nullable|integer', 'supplier_reference' => 'nullable|string', 'notes' => 'nullable|string'] + $lines,'credits' => $common + ['accounting_period_id' => 'nullable|integer', 'supplier_bill_id' => 'required|integer', 'credit_date' => 'required|date', 'supplier_reference' => 'nullable|string', 'notes' => 'nullable|string'] + $lines,default => abort(404)

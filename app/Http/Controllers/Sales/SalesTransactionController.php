@@ -147,7 +147,7 @@ class SalesTransactionController extends Controller
     {
         [, $title, $singular] = $this->definition($type);
 
-        return compact('company', 'type', 'title', 'singular') + ['company' => $company->load('baseCurrency'), 'branches' => $company->branches()->where('is_active', true)->get(), 'customers' => $company->customers()->where('is_active', true)->orderBy('name')->get(), 'items' => $company->items()->where('is_active', true)->with('revenueAccount')->orderBy('name')->get(), 'accounts' => $company->accounts()->where('is_active', true)->orderBy('code')->get(), 'years' => $company->financialYears()->with('periods')->get(), 'invoices' => $company->salesInvoices()->whereIn('status', ['posted', 'partially_paid'])->with('customer')->get()];
+        return compact('company', 'type', 'title', 'singular') + ['company' => $company->load('baseCurrency'), 'branches' => $company->branches()->where('is_active', true)->get(), 'customers' => $company->customers()->where('is_active', true)->orderBy('name')->get(), 'items' => $company->items()->where('is_active', true)->with('revenueAccount')->orderBy('name')->get(), 'accounts' => $company->accounts()->where('is_active', true)->orderBy('code')->get(), 'taxCodes' => $company->taxCodes()->where('is_active', true)->orderBy('code')->get(), 'years' => $company->financialYears()->with('periods')->get(), 'invoices' => $company->salesInvoices()->whereIn('status', ['posted', 'partially_paid'])->with('customer')->get()];
     }
 
     private function rules(string $type): array
@@ -156,7 +156,7 @@ class SalesTransactionController extends Controller
         if ($type === 'receipts') {
             return $common + ['accounting_period_id' => 'nullable|integer', 'receipt_date' => 'required|date', 'amount' => 'required|numeric|min:0.01', 'payment_method' => 'required|string|max:32', 'reference' => 'nullable|string|max:255', 'receiving_account_id' => 'required|integer', 'allocations' => 'nullable|array', 'allocations.*.sales_invoice_id' => 'required|integer', 'allocations.*.amount' => 'required|numeric|min:0'];
         }
-        $lineRules = ['lines' => 'required|array|min:1', 'lines.*.item_id' => 'nullable|integer', 'lines.*.revenue_account_id' => 'required|integer', 'lines.*.description' => 'required|string', 'lines.*.quantity' => 'required|numeric|min:0.0001', 'lines.*.unit_price' => 'required|numeric|min:0', 'lines.*.discount' => 'nullable|numeric|min:0'];
+        $lineRules = ['lines' => 'required|array|min:1', 'lines.*.item_id' => 'nullable|integer', 'lines.*.revenue_account_id' => 'required|integer', 'lines.*.description' => 'required|string', 'lines.*.quantity' => 'required|numeric|min:0.0001', 'lines.*.unit_price' => 'required|numeric|min:0', 'lines.*.discount' => 'nullable|numeric|min:0', 'lines.*.tax_code_id' => 'nullable|integer', 'lines.*.tax_inclusive' => 'nullable|boolean'];
 
         return match ($type) {
             'quotations' => $common + ['quotation_date' => 'required|date', 'expiry_date' => 'nullable|date|after_or_equal:quotation_date', 'customer_reference' => 'nullable|string|max:255', 'notes' => 'nullable|string'] + $lineRules,
