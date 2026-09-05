@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 
 final class SalesWorkflowService
 {
-    public function __construct(private SalesService $sales, private DocumentNumberService $numbers, private BranchService $branches, private AuditLogger $audit, private FinancialYearResolver $years, private AccountingLockService $locks) {}
+    public function __construct(private SalesService $sales, private DocumentNumberService $numbers, private BranchService $branches, private AuditLogger $audit, private FinancialYearResolver $years, private AccountingLockService $locks, private TaxCalculationService $tax, private TaxDefaultService $taxDefaults) {}
 
     public function create(Company $company, string $type, array $data, User $user): Model
     {
@@ -117,18 +117,31 @@ final class SalesWorkflowService
         $lines = $data['lines'];
         unset($data['lines']);
         $this->validateLines($company, $lines);
-        $total = $this->total($lines);
-        DB::transaction(function () use ($document, $data, $lines, $branch, $customer, $total, $user) {
+        $calculated = collect($lines)->map(function ($line) use ($company, $data, $dateField, $document, $customer) {
+            $net = $this->lineAmount($line);
+            if ($document instanceof SalesInvoice) {
+                $line['tax_code_id'] = $this->taxDefaults->sales($company, $line, $customer, $data[$dateField]);
+            }
+            $result = $document instanceof SalesInvoice && ! empty($line['tax_code_id'])
+                ? $this->tax->calculate($company, (int) $line['tax_code_id'], $data[$dateField], $net, (bool) ($line['tax_inclusive'] ?? false))
+                : null;
+
+            return [...$line, 'line_amount' => $result['net'] ?? $net, 'tax_amount' => $result['tax'] ?? '0.0000'];
+        })->all();
+        $subtotal = collect($calculated)->reduce(fn ($sum, $line) => bcadd($sum, $line['line_amount'], 4), '0.0000');
+        $tax = collect($calculated)->reduce(fn ($sum, $line) => bcadd($sum, $line['tax_amount'], 4), '0.0000');
+        $total = bcadd($subtotal, $tax, 4);
+        DB::transaction(function () use ($document, $data, $calculated, $branch, $customer, $subtotal, $tax, $total, $user) {
             $document = $document->newQuery()->lockForUpdate()->findOrFail($document->id);
             if ($document->status !== 'draft') {
                 throw ValidationException::withMessages(['document' => 'Only Draft documents can be edited.']);
             }
-            $document->update([...$data, 'customer_id' => $customer->id, 'branch_id' => $branch->id, 'subtotal' => $total, 'total' => $total, 'updated_by' => $user->id]);
+            $document->update([...$data, 'customer_id' => $customer->id, 'branch_id' => $branch->id, 'subtotal' => $subtotal, ...($document instanceof SalesInvoice ? ['tax_amount' => $tax] : []), 'total' => $total, 'updated_by' => $user->id]);
             $document->lines()->delete();
-            foreach ($lines as $line) {
-                $values = [...$line, 'line_amount' => $this->lineAmount($line)];
-                if ($document instanceof SalesInvoice) {
-                    $values['tax_amount'] = 0;
+            foreach ($calculated as $line) {
+                $values = $line;
+                if (! $document instanceof SalesInvoice) {
+                    unset($values['tax_amount'], $values['tax_code_id'], $values['tax_inclusive']);
                 }
                 $document->lines()->create($values);
             }
@@ -149,14 +162,22 @@ final class SalesWorkflowService
         $invoice = $company->salesInvoices()->where('customer_id', $customer->id)->whereIn('status', ['posted', 'partially_paid', 'paid'])->findOrFail($data['sales_invoice_id']);
         $lines = $data['lines'];
         $this->validateLines($company, $lines);
-        $total = $this->total($lines);
+        $calculated = collect($lines)->map(function ($line) use ($company, $data, $customer) {
+            $net = $this->lineAmount($line);
+            $line['tax_code_id'] = $this->taxDefaults->sales($company, $line, $customer, $data['credit_note_date']);
+            $result = ! empty($line['tax_code_id']) ? $this->tax->calculate($company, (int) $line['tax_code_id'], $data['credit_note_date'], $net, (bool) ($line['tax_inclusive'] ?? false)) : null;
+
+            return [...$line, 'line_amount' => $result['net'] ?? $net, 'tax_amount' => $result['tax'] ?? '0.0000'];
+        })->all();
+        $tax = collect($calculated)->reduce(fn ($sum, $line) => bcadd($sum, $line['tax_amount'], 4), '0.0000');
+        $total = bcadd(collect($calculated)->reduce(fn ($sum, $line) => bcadd($sum, $line['line_amount'], 4), '0.0000'), $tax, 4);
         $credited = SalesCreditNote::where('sales_invoice_id', $invoice->id)->where('status', 'posted')->when($note->exists, fn ($q) => $q->whereKeyNot($note->id))->sum('total');
         $remaining = bcsub(bcsub($invoice->total, $invoice->amount_paid, 4), (string) $credited, 4);
         if (bccomp($total, $remaining, 4) > 0) {
             throw ValidationException::withMessages(['total' => 'Credit note exceeds the invoice remaining balance.']);
         }
-        DB::transaction(function () use ($company, $note, $data, $lines, $branch, $customer, $invoice, $total, $user) {
-            $values = ['company_id' => $company->id, 'customer_id' => $customer->id, 'branch_id' => $branch->id, 'sales_invoice_id' => $invoice->id, 'financial_year_id' => $data['financial_year_id'], 'accounting_period_id' => $data['accounting_period_id'], 'credit_note_date' => $data['credit_note_date'], 'notes' => $data['notes'] ?? null, 'total' => $total, 'updated_by' => $user->id];
+        DB::transaction(function () use ($company, $note, $data, $calculated, $branch, $customer, $invoice, $tax, $total, $user) {
+            $values = ['company_id' => $company->id, 'customer_id' => $customer->id, 'branch_id' => $branch->id, 'sales_invoice_id' => $invoice->id, 'financial_year_id' => $data['financial_year_id'], 'accounting_period_id' => $data['accounting_period_id'], 'credit_note_date' => $data['credit_note_date'], 'notes' => $data['notes'] ?? null, 'tax_amount' => $tax, 'total' => $total, 'updated_by' => $user->id];
             if (! $note->exists) {
                 $values += ['credit_note_number' => $this->numbers->next($company, 'credit_note', 'CN'), 'status' => 'draft', 'created_by' => $user->id];
                 $note->fill($values)->save();
@@ -164,8 +185,8 @@ final class SalesWorkflowService
                 $note->update($values);
                 $note->lines()->delete();
             }
-            foreach ($lines as $line) {
-                $note->lines()->create(['revenue_account_id' => $line['revenue_account_id'], 'description' => $line['description'], 'quantity' => $line['quantity'], 'unit_price' => $line['unit_price'], 'line_amount' => $this->lineAmount($line)]);
+            foreach ($calculated as $line) {
+                $note->lines()->create(['revenue_account_id' => $line['revenue_account_id'], 'description' => $line['description'], 'quantity' => $line['quantity'], 'unit_price' => $line['unit_price'], 'line_amount' => $line['line_amount'], 'tax_amount' => $line['tax_amount'], 'tax_code_id' => $line['tax_code_id'] ?? null, 'tax_inclusive' => $line['tax_inclusive'] ?? false]);
             }
             $this->audit->log($note->wasRecentlyCreated ? 'credit_note.created' : 'credit_note.updated', $note, $company->id, $user->id);
         });

@@ -12,7 +12,7 @@ final class ItemMaintenanceService
 {
     private const LINKS = ['sales_quotation_lines' => 'sales quotations', 'sales_order_lines' => 'sales orders', 'sales_invoice_lines' => 'sales invoices', 'sales_credit_note_lines' => 'sales credit notes'];
 
-    public function __construct(private AuditLogger $audit) {}
+    public function __construct(private AuditLogger $audit, private TaxDefaultService $taxDefaults) {}
 
     public function blockers(Item $item): array
     {
@@ -28,6 +28,8 @@ final class ItemMaintenanceService
     {
         $this->access($c, $item, $u);
         $c->accounts()->findOrFail($data['revenue_account_id']);
+        $this->taxDefaults->validate($c, $data['default_sales_tax_code_id'] ?? null);
+        $this->taxDefaults->validate($c, $data['default_purchase_tax_code_id'] ?? null);
 
         return DB::transaction(function () use ($c, $item, $data, $u) {
             $old = $item->toArray();

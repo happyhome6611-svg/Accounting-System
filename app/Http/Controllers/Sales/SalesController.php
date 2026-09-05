@@ -93,13 +93,13 @@ class SalesController extends Controller
 
     private function customerRules(Company $company, Customer $customer): array
     {
-        return ['code' => ['required', 'string', 'max:40', Rule::unique('customers')->where('company_id', $company->id)->ignore($customer->id)], 'name' => ['required', 'string', 'max:255'], 'legal_name' => ['nullable', 'string', 'max:255'], 'type' => ['required', Rule::in(['business', 'individual'])], 'email' => ['nullable', 'email'], 'phone' => ['nullable', 'string', 'max:40'], 'billing_address' => ['nullable', 'string'], 'shipping_address' => ['nullable', 'string'], 'country_id' => ['nullable', 'exists:countries,id'], 'currency_id' => ['required', 'exists:currencies,id'], 'tax_identifiers' => ['nullable', 'array'], 'payment_terms_days' => ['required', 'integer', 'min:0'], 'credit_limit' => ['required', 'numeric', 'min:0'], 'receivable_account_id' => ['required', 'integer']];
+        return ['code' => ['required', 'string', 'max:40', Rule::unique('customers')->where('company_id', $company->id)->ignore($customer->id)], 'name' => ['required', 'string', 'max:255'], 'legal_name' => ['nullable', 'string', 'max:255'], 'type' => ['required', Rule::in(['business', 'individual'])], 'email' => ['nullable', 'email'], 'phone' => ['nullable', 'string', 'max:40'], 'billing_address' => ['nullable', 'string'], 'shipping_address' => ['nullable', 'string'], 'country_id' => ['nullable', 'exists:countries,id'], 'currency_id' => ['required', 'exists:currencies,id'], 'tax_identifiers' => ['nullable', 'array'], 'payment_terms_days' => ['required', 'integer', 'min:0'], 'credit_limit' => ['required', 'numeric', 'min:0'], 'receivable_account_id' => ['required', 'integer'], 'default_sales_tax_code_id' => ['nullable', 'integer']];
     }
 
     public function storeCustomer(Request $r, Company $company, SalesService $s)
     {
         $company = $this->company($r, $company);
-        $data = $r->validate(['code' => 'nullable|string|max:40', 'name' => 'required|string', 'legal_name' => 'nullable|string', 'email' => 'nullable|email', 'phone' => 'nullable|string', 'currency_id' => 'required|integer', 'receivable_account_id' => 'required|integer', 'payment_terms_days' => 'required|integer|min:0', 'credit_limit' => 'required|numeric|min:0']);
+        $data = $r->validate(['code' => 'nullable|string|max:40', 'name' => 'required|string', 'legal_name' => 'nullable|string', 'email' => 'nullable|email', 'phone' => 'nullable|string', 'currency_id' => 'required|integer', 'receivable_account_id' => 'required|integer', 'payment_terms_days' => 'required|integer|min:0', 'credit_limit' => 'required|numeric|min:0', 'default_sales_tax_code_id' => 'nullable|integer']);
         $s->createCustomer($company, $data + ['is_active' => true], $r->user());
 
         return back();
@@ -163,13 +163,13 @@ class SalesController extends Controller
 
     private function itemRules(Company $company, Item $item): array
     {
-        return ['code' => ['required', 'string', 'max:40', Rule::unique('items')->where('company_id', $company->id)->ignore($item->id)], 'name' => 'required|string|max:255', 'description' => 'nullable|string', 'type' => ['required', Rule::in(['product', 'service'])], 'unit' => 'required|string|max:20', 'sales_price' => 'required|numeric|min:0', 'revenue_account_id' => 'required|integer', 'tax_category' => 'nullable|string'];
+        return ['code' => ['required', 'string', 'max:40', Rule::unique('items')->where('company_id', $company->id)->ignore($item->id)], 'name' => 'required|string|max:255', 'description' => 'nullable|string', 'type' => ['required', Rule::in(['product', 'service'])], 'unit' => 'required|string|max:20', 'sales_price' => 'required|numeric|min:0', 'revenue_account_id' => 'required|integer', 'tax_category' => 'nullable|string', 'default_sales_tax_code_id' => 'nullable|integer', 'default_purchase_tax_code_id' => 'nullable|integer'];
     }
 
     public function storeItem(Request $r, Company $company, SalesService $s)
     {
         $company = $this->company($r, $company);
-        $data = $r->validate(['code' => 'required|string|max:40', 'name' => 'required|string', 'type' => 'required|in:product,service', 'unit' => 'required|string', 'sales_price' => 'required|numeric|min:0', 'revenue_account_id' => 'required|integer']);
+        $data = $r->validate(['code' => 'required|string|max:40', 'name' => 'required|string', 'type' => 'required|in:product,service', 'unit' => 'required|string', 'sales_price' => 'required|numeric|min:0', 'revenue_account_id' => 'required|integer', 'default_sales_tax_code_id' => 'nullable|integer', 'default_purchase_tax_code_id' => 'nullable|integer']);
         $s->createItem($company, $data + ['is_active' => true], $r->user());
 
         return back();

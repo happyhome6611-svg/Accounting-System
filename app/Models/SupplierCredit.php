@@ -13,7 +13,7 @@ class SupplierCredit extends Model
 
     protected function casts(): array
     {
-        return ['credit_date' => 'date', 'total' => 'decimal:4'];
+        return ['credit_date' => 'date', 'tax_amount' => 'decimal:4', 'total' => 'decimal:4'];
     }
 
     public function lines()

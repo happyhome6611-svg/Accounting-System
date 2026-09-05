@@ -52,6 +52,8 @@
             </main>
         </div>
     </div>
+    @includeWhen(isset($taxCodes, $type) && in_array($type, ['bills', 'credits'], true), 'purchases.tax-line-controls')
+    @includeWhen(isset($taxCodes, $items, $customers, $type, $company) && in_array($type, ['invoices', 'credit-notes'], true), 'sales.transactions.tax-defaults')
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.addEventListener('wheel', function (event) {

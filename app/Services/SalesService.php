@@ -9,19 +9,21 @@ use App\Models\SalesCreditNote;
 use App\Models\SalesInvoice;
 use App\Models\SalesOrder;
 use App\Models\SalesQuotation;
+use App\Models\TransactionTaxLine;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 final class SalesService
 {
-    public function __construct(private DocumentNumberService $numbers, private JournalService $journals, private AuditLogger $audit, private BranchService $branches, private FinancialYearResolver $years) {}
+    public function __construct(private DocumentNumberService $numbers, private JournalService $journals, private AuditLogger $audit, private BranchService $branches, private FinancialYearResolver $years, private TaxCalculationService $tax, private TaxDefaultService $taxDefaults) {}
 
     public function createCustomer(Company $company, array $data, User $user): Customer
     {
         $this->access($company, $user);
         $this->active($company);
         $this->account($company, $data['receivable_account_id']);
+        $this->taxDefaults->validate($company, $data['default_sales_tax_code_id'] ?? null);
         $customer = $company->customers()->create([...$data, 'code' => $data['code'] ?? $this->numbers->next($company, 'customer', 'CUS'), 'created_by' => $user->id, 'updated_by' => $user->id]);
         $this->audit->log('customer.created', $customer, $company->id, $user->id, null, $customer->toArray());
 
@@ -33,6 +35,8 @@ final class SalesService
         $this->access($company, $user);
         $this->active($company);
         $this->account($company, $data['revenue_account_id']);
+        $this->taxDefaults->validate($company, $data['default_sales_tax_code_id'] ?? null);
+        $this->taxDefaults->validate($company, $data['default_purchase_tax_code_id'] ?? null);
 
         return $company->items()->create([...$data, 'created_by' => $user->id, 'updated_by' => $user->id]);
     }
@@ -91,16 +95,24 @@ final class SalesService
         $data['accounting_period_id'] = $period->id;
 
         return DB::transaction(function () use ($c, $data, $u, $customer, $branch) {
-            $lines = $data['lines'];
+            $lines = collect($data['lines'])->map(function ($line) use ($c, $data, $customer) {
+                $net = $this->lineAmount($line);
+                $line['tax_code_id'] = $this->taxDefaults->sales($c, $line, $customer, $data['invoice_date']);
+                $result = $line['tax_code_id'] ? $this->tax->calculate($c, (int) $line['tax_code_id'], $data['invoice_date'], $net, (bool) ($line['tax_inclusive'] ?? false)) : null;
+
+                return [...$line, 'line_amount' => $result['net'] ?? $net, 'tax_amount' => $result['tax'] ?? '0.0000'];
+            })->all();
             unset($data['lines']);
-            $total = $this->total($lines);
-            $invoice = SalesInvoice::create([...$data, 'company_id' => $c->id, 'branch_id' => $branch->id, 'currency_id' => $data['currency_id'] ?? $customer->currency_id, 'invoice_number' => $this->numbers->next($c, 'sales_invoice', 'INV'), 'subtotal' => $total, 'tax_amount' => 0, 'total' => $total, 'amount_paid' => 0, 'status' => 'draft', 'created_by' => $u->id, 'updated_by' => $u->id]);
+            $subtotal = collect($lines)->reduce(fn ($sum, $line) => bcadd($sum, $line['line_amount'], 4), '0.0000');
+            $tax = collect($lines)->reduce(fn ($sum, $line) => bcadd($sum, $line['tax_amount'], 4), '0.0000');
+            $total = bcadd($subtotal, $tax, 4);
+            $invoice = SalesInvoice::create([...$data, 'company_id' => $c->id, 'branch_id' => $branch->id, 'currency_id' => $data['currency_id'] ?? $customer->currency_id, 'invoice_number' => $this->numbers->next($c, 'sales_invoice', 'INV'), 'subtotal' => $subtotal, 'tax_amount' => $tax, 'total' => $total, 'amount_paid' => 0, 'status' => 'draft', 'created_by' => $u->id, 'updated_by' => $u->id]);
             foreach ($lines as $line) {
                 if (! empty($line['item_id']) && ! $c->items()->whereKey($line['item_id'])->where('is_active', true)->exists()) {
                     throw ValidationException::withMessages(['item' => 'Inactive or cross-company items cannot be selected.']);
                 }
                 $this->account($c, $line['revenue_account_id']);
-                $invoice->lines()->create([...$line, 'tax_amount' => 0, 'line_amount' => $this->lineAmount($line)]);
+                $invoice->lines()->create($line);
             }
             $this->audit->log('invoice.created', $invoice, $c->id, $u->id);
 
@@ -116,13 +128,32 @@ final class SalesService
             if ($invoice->status !== 'draft') {
                 throw ValidationException::withMessages(['invoice' => 'Invoice must be Draft.']);
             }
+            $taxSnapshots = $invoice->lines->whereNotNull('tax_code_id')->mapWithKeys(function ($line) use ($c, $invoice) {
+                $result = $this->tax->snapshotForPosting($c, $line->tax_code_id, $invoice->invoice_date->toDateString(), bcadd($line->line_amount, $line->tax_amount, 4));
+                if (bccomp($result['net'], $line->line_amount, 4) !== 0 || bccomp($result['tax'], $line->tax_amount, 4) !== 0) {
+                    throw ValidationException::withMessages(['tax' => 'Tax configuration changed after this draft was calculated. Re-save the draft before posting.']);
+                }
+
+                return [$line->id => $result];
+            });
             $credits = [];
             foreach ($invoice->lines->groupBy('revenue_account_id') as $account => $lines) {
                 $credits[] = ['account_id' => $account, 'description' => $invoice->invoice_number, 'debit' => '0', 'credit' => $lines->sum('line_amount')];
             }
+            if (bccomp($invoice->tax_amount, '0', 4) > 0) {
+                $control = $c->taxSetting()->value('output_tax_account_id');
+                if (! $control) {
+                    throw ValidationException::withMessages(['tax' => 'Configure an Output Tax Control Account before posting taxable sales.']);
+                }
+                $credits[] = ['account_id' => $control, 'description' => $invoice->invoice_number.' output tax', 'debit' => '0', 'credit' => $invoice->tax_amount];
+            }
             $journal = $this->journals->create($c, ['branch_id' => $invoice->branch_id, 'financial_year_id' => $invoice->accountingPeriod->financial_year_id, 'accounting_period_id' => $invoice->accounting_period_id, 'transaction_date' => $invoice->invoice_date->toDateString(), 'reference' => $invoice->invoice_number, 'description' => 'Sales invoice '.$invoice->invoice_number, 'lines' => [['account_id' => $invoice->customer->receivable_account_id, 'description' => $invoice->invoice_number, 'debit' => $invoice->total, 'credit' => '0'], ...$credits]], $u);
             $this->journals->post($journal, $u);
             $this->write(fn () => $invoice->update(['status' => 'posted', 'journal_entry_id' => $journal->id, 'updated_by' => $u->id]));
+            foreach ($invoice->lines->whereNotNull('tax_code_id') as $line) {
+                $result = $taxSnapshots[$line->id];
+                TransactionTaxLine::create(['company_id' => $c->id, 'country_id' => $result['country_id'], 'tax_registration_id' => $result['tax_registration_id'], 'tax_period_id' => $result['tax_period_id'], 'tax_code_id' => $result['tax_code_id'], 'journal_entry_id' => $journal->id, 'source_type' => SalesInvoice::class, 'source_id' => $invoice->id, 'source_line_type' => $line::class, 'source_line_id' => $line->id, 'direction' => 'output', 'transaction_date' => $invoice->invoice_date, 'tax_code_snapshot' => $result['tax_code'], 'tax_type_snapshot' => $result['tax_type'], 'treatment_snapshot' => $result['treatment'], 'registration_number_snapshot' => $result['registration_number'], 'rate_snapshot' => $result['rate'], 'net_amount' => $line->line_amount, 'tax_amount' => $line->tax_amount, 'gross_amount' => bcadd($line->line_amount, $line->tax_amount, 4)]);
+            }
             $this->audit->log('invoice.posted', $invoice, $c->id, $u->id);
 
             return $invoice;
@@ -138,6 +169,14 @@ final class SalesService
             if ($note->status !== 'draft') {
                 throw ValidationException::withMessages(['credit_note' => 'Credit note must be Draft.']);
             }
+            $taxSnapshots = $note->lines->whereNotNull('tax_code_id')->mapWithKeys(function ($line) use ($c, $note) {
+                $result = $this->tax->snapshotForPosting($c, $line->tax_code_id, $note->credit_note_date->toDateString(), bcadd($line->line_amount, $line->tax_amount, 4));
+                if (bccomp($result['net'], $line->line_amount, 4) !== 0 || bccomp($result['tax'], $line->tax_amount, 4) !== 0) {
+                    throw ValidationException::withMessages(['tax' => 'Tax configuration changed after this draft was calculated. Re-save the draft before posting.']);
+                }
+
+                return [$line->id => $result];
+            });
             $branch = $this->branches->resolve($c, $note->branch_id ? (int) $note->branch_id : null);
             if (! $note->branch_id) {
                 $note->update(['branch_id' => $branch->id]);
@@ -146,9 +185,20 @@ final class SalesService
             foreach ($note->lines->groupBy('revenue_account_id') as $account => $lines) {
                 $debits[] = ['account_id' => $account, 'description' => $note->credit_note_number, 'debit' => $lines->sum('line_amount'), 'credit' => '0'];
             }
+            if (bccomp((string) ($note->tax_amount ?? 0), '0', 4) > 0) {
+                $control = $c->taxSetting()->value('output_tax_account_id');
+                if (! $control) {
+                    throw ValidationException::withMessages(['tax' => 'Configure an Output Tax Control Account before posting taxable credits.']);
+                }
+                $debits[] = ['account_id' => $control, 'description' => $note->credit_note_number.' output tax', 'debit' => $note->tax_amount, 'credit' => '0'];
+            }
             $journal = $this->journals->create($c, ['branch_id' => $branch->id, 'financial_year_id' => $note->accountingPeriod->financial_year_id, 'accounting_period_id' => $note->accounting_period_id, 'transaction_date' => $note->credit_note_date, 'reference' => $note->credit_note_number, 'description' => 'Credit note '.$note->credit_note_number, 'lines' => [...$debits, ['account_id' => $customer->receivable_account_id, 'description' => $note->credit_note_number, 'debit' => '0', 'credit' => $note->total]]], $u);
             $this->journals->post($journal, $u);
             $note->update(['status' => 'posted', 'journal_entry_id' => $journal->id, 'updated_by' => $u->id]);
+            foreach ($note->lines->whereNotNull('tax_code_id') as $line) {
+                $result = $taxSnapshots[$line->id];
+                TransactionTaxLine::create(['company_id' => $c->id, 'country_id' => $result['country_id'], 'tax_registration_id' => $result['tax_registration_id'], 'tax_period_id' => $result['tax_period_id'], 'tax_code_id' => $result['tax_code_id'], 'journal_entry_id' => $journal->id, 'source_type' => SalesCreditNote::class, 'source_id' => $note->id, 'source_line_type' => $line::class, 'source_line_id' => $line->id, 'direction' => 'output', 'transaction_date' => $note->credit_note_date, 'tax_code_snapshot' => $result['tax_code'], 'tax_type_snapshot' => $result['tax_type'], 'treatment_snapshot' => $result['treatment'], 'registration_number_snapshot' => $result['registration_number'], 'rate_snapshot' => $result['rate'], 'net_amount' => bcmul($line->line_amount, '-1', 4), 'tax_amount' => bcmul($line->tax_amount, '-1', 4), 'gross_amount' => bcmul(bcadd($line->line_amount, $line->tax_amount, 4), '-1', 4)]);
+            }
             $this->audit->log('credit_note.posted', $note, $c->id, $u->id);
 
             return $note;
