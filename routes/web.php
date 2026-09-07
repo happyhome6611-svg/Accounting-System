@@ -10,6 +10,7 @@ use App\Http\Controllers\Company\CompanyController;
 use App\Http\Controllers\Company\FinancialYearController;
 use App\Http\Controllers\Company\PriorPeriodAdjustmentController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ImportExportController;
 use App\Http\Controllers\PeriodEndController;
 use App\Http\Controllers\Purchases\PurchasesController;
 use App\Http\Controllers\Sales\ReceivablesController;
@@ -170,6 +171,23 @@ Route::middleware('auth')->group(function () {
     Route::post('/tax/{country}/entities/{company}/periods/{period}/prepare', [TaxController::class, 'preparePeriod'])->name('tax.periods.prepare');
     Route::post('/tax/{country}/entities/{company}/periods/{period}/file', [TaxController::class, 'filePeriod'])->name('tax.periods.file');
     Route::post('/tax/{country}/entities/{company}/adjustments', [TaxController::class, 'adjustment'])->name('tax.adjustments.store');
+    Route::get('/import-export', [ImportExportController::class, 'index'])->name('import-export');
+    Route::get('/import-export/{country}', [ImportExportController::class, 'country'])->name('import-export.country');
+    Route::get('/import-export/{country}/entities/{company}', [ImportExportController::class, 'workspace'])->name('import-export.workspace');
+    Route::get('/import-export/{country}/entities/{company}/imports/create', [ImportExportController::class, 'create'])->name('import-export.imports.create');
+    Route::post('/import-export/{country}/entities/{company}/imports', [ImportExportController::class, 'upload'])->name('import-export.imports.upload');
+    Route::get('/import-export/{country}/entities/{company}/imports/{batch}', [ImportExportController::class, 'show'])->name('import-export.batches.show');
+    Route::post('/import-export/{country}/entities/{company}/imports/{batch}/worksheet', [ImportExportController::class, 'worksheet'])->name('import-export.batches.worksheet');
+    Route::post('/import-export/{country}/entities/{company}/imports/{batch}/validate', [ImportExportController::class, 'validateBatch'])->name('import-export.batches.validate');
+    Route::post('/import-export/{country}/entities/{company}/imports/{batch}/confirm', [ImportExportController::class, 'confirm'])->name('import-export.batches.confirm');
+    Route::post('/import-export/{country}/entities/{company}/imports/{batch}/cancel', [ImportExportController::class, 'cancel'])->name('import-export.batches.cancel');
+    Route::get('/import-export/{country}/entities/{company}/imports/{batch}/errors', [ImportExportController::class, 'errors'])->name('import-export.batches.errors');
+    Route::get('/import-export/{country}/entities/{company}/profiles/create', [ImportExportController::class, 'profileCreate'])->name('import-export.profiles.create');
+    Route::post('/import-export/{country}/entities/{company}/profiles', [ImportExportController::class, 'profileStore'])->name('import-export.profiles.store');
+    Route::get('/import-export/{country}/entities/{company}/profiles/{profile}/edit', [ImportExportController::class, 'profileEdit'])->name('import-export.profiles.edit');
+    Route::put('/import-export/{country}/entities/{company}/profiles/{profile}', [ImportExportController::class, 'profileUpdate'])->name('import-export.profiles.update');
+    Route::get('/import-export/{country}/entities/{company}/exports/create', [ImportExportController::class, 'exportCreate'])->name('import-export.exports.create');
+    Route::post('/import-export/{country}/entities/{company}/exports', [ImportExportController::class, 'export'])->name('import-export.exports.generate');
     foreach (['settings'] as $module) {
         Route::view("/{$module}", 'coming-soon.index', ['module' => ucfirst($module)])->name($module);
     }

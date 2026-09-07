@@ -124,4 +124,19 @@ class Company extends Model
     {
         return $this->hasMany(TransactionTaxLine::class);
     }
+
+    public function importBatches()
+    {
+        return $this->hasMany(ImportBatch::class);
+    }
+
+    public function importProfiles()
+    {
+        return $this->hasMany(ImportProfile::class);
+    }
+
+    public function exportLogs()
+    {
+        return $this->hasMany(ExportLog::class);
+    }
 }
