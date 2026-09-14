@@ -1,0 +1,7 @@
+Bill Number / Source ID,Supplier Code,Bill Date,Due Date,Branch Code,Product / Service Code,Expense / Asset Account,Description,Quantity,Unit Price,Discount Amount,Tax Code,Tax Inclusive,Source Tax Amount
+BILL-BAD-SUPPLIER,UNKNOWN,2027-03-01,2027-03-31,MAIN,SERV001,5000,Unknown supplier,1,200.00,0.00,STANDARD,false,20.00
+BILL-BAD-ACCOUNT,SUP001,2027-03-01,2027-03-31,MAIN,SERV001,9999,Unknown expense account,1,200.00,0.00,STANDARD,false,20.00
+BILL-BAD-TAX,SUP001,2027-03-01,2027-03-31,MAIN,SERV001,5000,Unknown tax code,1,200.00,0.00,UNKNOWN,false,20.00
+BILL-BAD-DATE,SUP001,not-a-date,2027-03-31,MAIN,SERV001,5000,Malformed date,1,200.00,0.00,STANDARD,false,20.00
+BILL-ATOMIC,SUP001,2027-03-01,2027-03-31,MAIN,SERV001,5000,Valid line in invalid document,1,200.00,0.00,STANDARD,false,20.00
+BILL-ATOMIC,SUP001,2027-03-01,2027-03-31,MAIN,UNKNOWN,5000,Invalid line blocks whole document,1,50.00,0.00,ZERO,false,0.00

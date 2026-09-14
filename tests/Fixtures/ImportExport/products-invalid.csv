@@ -1,0 +1,6 @@
+Code / SKU,Name,Type,Sales Price,Purchase Price,Sales Account,Purchase Account,Default Sales Tax Code,Default Purchase Tax Code
+SERV001,Duplicate Service,service,100.00,0.00,4000,5000,STANDARD,STANDARD
+PROD002,,product,20.00,10.00,4000,5000,,
+PROD003,Unsupported Type,inventory,20.00,10.00,4000,5000,,
+PROD004,Negative Price,product,-1.00,10.00,4000,5000,,
+PROD005,Unknown Tax,product,20.00,10.00,4000,5000,UNKNOWN,UNKNOWN

@@ -1,0 +1,4 @@
+Supplier Code,Supplier Name,Legal Name,Email,Phone,Address,Payment Terms Days,Credit Limit,Active
+SUP001,Harbour Office Supplies,Harbour Office Supplies Limited,accounts@harbour.example,0211001001,10 Fictional Quay,30,7500.00,true
+SUP002,Southern Cloud Hosting,Southern Cloud Hosting Limited,billing@southerncloud.example,0211001002,20 Fictional Road,14,4000.00,true
+SUP003,Evergreen Maintenance,Evergreen Maintenance Limited,accounts@evergreen.example,0211001003,30 Fictional Avenue,7,2000.00,true

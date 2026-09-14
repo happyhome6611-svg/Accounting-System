@@ -92,6 +92,7 @@ final class ImportService
         }
         $counts = ['valid' => 0, 'warning' => 0, 'error' => 0, 'duplicate' => 0];
         DB::transaction(function () use ($company, $batch, $mapping, $options, $user, $adapter, &$counts) {
+            $seenFingerprints = [];
             foreach ($batch->rows()->lockForUpdate()->get() as $row) {
                 $mapped = [];
                 foreach ($mapping as $source => $target) {
@@ -104,7 +105,9 @@ final class ImportService
                 }
                 $result = $adapter->validate($company, $mapped, $options);
                 $prior = ImportRow::query()->where('row_fingerprint', $row->row_fingerprint)->where('validation_status', 'imported')->whereHas('batch', fn ($q) => $q->where('company_id', $company->id)->where('data_type', $batch->data_type))->exists();
-                $duplicate = $prior ? 'exact_duplicate' : $result['duplicate'];
+                $sameBatch = isset($seenFingerprints[$row->row_fingerprint]);
+                $seenFingerprints[$row->row_fingerprint] = true;
+                $duplicate = ($prior || $sameBatch) ? 'exact_duplicate' : $result['duplicate'];
                 $status = $result['errors'] ? 'error' : (($result['warnings'] || $duplicate !== 'not_duplicate') ? 'warning' : 'valid');
                 $counts[$status]++;
                 if ($duplicate !== 'not_duplicate') {

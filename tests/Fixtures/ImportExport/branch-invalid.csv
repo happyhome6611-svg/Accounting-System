@@ -1,0 +1,2 @@
+Invoice Number / Source ID,Customer Code,Invoice Date,Due Date,Branch Code,Revenue Account,Description,Quantity,Unit Price
+INV-BRANCH-BAD,CUST001,2027-03-01,2027-03-31,OTHER-ENTITY,4000,Invalid or cross-entity branch,1,25.00

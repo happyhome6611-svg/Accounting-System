@@ -1,0 +1,5 @@
+Account Code,Account Name,Account Type,Normal Balance
+1010,Duplicate Fixture Bank,asset,debit
+6020,,expense,debit
+6030,Unsupported Classification,revenue,credit
+6030,Unsupported Classification,revenue,credit

@@ -1,0 +1,4 @@
+Customer Code,Customer Name,Legal Name,Email,Phone,Billing Address,Payment Terms Days,Credit Limit,Active
+CUST001,Alpha Services Ltd,Alpha Services Limited,accounts@alpha.example,0210001001,1 Fictional Way,30,5000.00,true
+CUST002,Beta Consulting,Beta Consulting Limited,accounts@beta.example,0210001002,2 Fictional Way,14,2500.00,true
+CUST003,Gamma Trading,Gamma Trading Limited,accounts@gamma.example,0210001003,3 Fictional Way,7,1000.00,true

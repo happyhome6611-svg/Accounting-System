@@ -1,0 +1,8 @@
+Invoice Number / Source ID,Customer Code,Invoice Date,Due Date,Branch Code,Product / Service Code,Revenue Account,Description,Quantity,Unit Price,Discount Amount,Tax Code,Tax Inclusive,Source Tax Amount
+INV-BAD-CUSTOMER,UNKNOWN,2027-03-01,2027-03-31,MAIN,SERV001,4000,Unknown customer,1,100.00,0.00,STANDARD,false,10.00
+INV-BAD-ITEM,CUST001,2027-03-01,2027-03-31,MAIN,UNKNOWN,9999,Unknown item and account,1,100.00,0.00,STANDARD,false,10.00
+INV-BAD-TAX,CUST001,2027-03-01,2027-03-31,MAIN,SERV001,4000,Unknown tax code,1,100.00,0.00,UNKNOWN,false,10.00
+INV001,CUST001,2027-03-01,2027-03-31,MAIN,SERV001,4000,Duplicate source reference,1,100.00,0.00,STANDARD,false,10.00
+INV-BAD-DATE,CUST001,not-a-date,2027-03-31,MAIN,SERV001,4000,Malformed date,1,100.00,0.00,STANDARD,false,10.00
+INV-ATOMIC,CUST001,2027-03-01,2027-03-31,MAIN,SERV001,4000,Valid line in invalid document,1,100.00,0.00,STANDARD,false,10.00
+INV-ATOMIC,CUST001,2027-03-01,2027-03-31,MAIN,UNKNOWN,4000,Invalid line blocks whole document,1,50.00,0.00,ZERO,false,0.00

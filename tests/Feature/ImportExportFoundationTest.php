@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\ImportExport\ExportService;
 use App\ImportExport\FileParser;
+use App\ImportExport\HeaderMapper;
+use App\ImportExport\ImportAdapterRegistry;
 use App\ImportExport\ImportService;
 use App\Models\Company;
 use App\Models\Country;
@@ -19,8 +21,6 @@ use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\TestCase;
 
 class ImportExportFoundationTest extends TestCase
@@ -41,15 +41,15 @@ class ImportExportFoundationTest extends TestCase
 
     public function test_csv_customer_import_preview_confirmation_duplicate_and_profile_are_safe(): void
     {
-        $csv = "Customer Code,Customer Name,Email\nCUST001,Alpha,alpha@example.com\nCUST002,Beta,beta@example.com\nCUST003,Gamma,gamma@example.com\n";
-        $mapping = ['Customer Code' => 'code', 'Customer Name' => 'name', 'Email' => 'email'];
+        $csv = $this->fixture('customers-valid.csv');
+        $mapping = ['Customer Code' => 'code', 'Customer Name' => 'name', 'Legal Name' => 'legal_name', 'Email' => 'email', 'Phone' => 'phone', 'Billing Address' => 'billing_address', 'Payment Terms Days' => 'payment_terms_days', 'Credit Limit' => 'credit_limit', 'Active' => 'active'];
         $batch = $this->batch('customers', $csv, $mapping);
         $this->assertSame('ready', $batch->status);
         $this->assertSame(3, $batch->valid_rows);
         $completed = app(ImportService::class)->confirm($this->company, $batch, $this->user);
         $this->assertSame('completed', $completed->status);
         $this->assertSame(3, $completed->imported_rows);
-        $this->assertDatabaseHas('customers', ['company_id' => $this->company->id, 'code' => 'CUST001', 'name' => 'Alpha']);
+        $this->assertDatabaseHas('customers', ['company_id' => $this->company->id, 'code' => 'CUST001', 'name' => 'Alpha Services Ltd']);
         app(ImportService::class)->confirm($this->company, $completed, $this->user);
         $this->assertSame(3, $this->company->customers()->whereIn('code', ['CUST001', 'CUST002', 'CUST003'])->count());
 
@@ -67,16 +67,13 @@ class ImportExportFoundationTest extends TestCase
 
     public function test_xlsx_parser_requires_explicit_sheet_and_rejects_malformed_files(): void
     {
-        $spreadsheet = new Spreadsheet;
-        $spreadsheet->getActiveSheet()->setTitle('Customers')->fromArray([['Customer Code', 'Customer Name'], ['C1', 'Alpha']]);
-        $spreadsheet->createSheet()->setTitle('Suppliers')->fromArray([['Supplier Code', 'Supplier Name'], ['S1', 'Vendor']]);
-        $path = storage_path('framework/testing/import-multi.xlsx');
-        (new Xlsx($spreadsheet))->save($path);
+        $path = $this->fixturePath('xlsx-multi-sheet.xlsx');
         $parser = app(FileParser::class);
-        $this->assertSame(['Customers', 'Suppliers'], $parser->worksheets($path, 'xlsx'));
+        $this->assertSame(['Customers', 'Suppliers', 'Products'], $parser->worksheets($path, 'xlsx'));
         $parsed = $parser->parse($path, 'xlsx', 'Suppliers');
-        $this->assertSame(['Supplier Code', 'Supplier Name'], $parsed['headers']);
-        $this->assertSame('S1', $parsed['rows'][0]['values']['Supplier Code']);
+        $this->assertSame(['Supplier Code', 'Supplier Name', 'Legal Name', 'Email', 'Phone', 'Address', 'Payment Terms Days', 'Credit Limit', 'Active'], $parsed['headers']);
+        $this->assertSame('SUP001', $parsed['rows'][0]['values']['Supplier Code']);
+        $this->assertCount(3, $parsed['rows']);
 
         $uploaded = new UploadedFile($path, 'multi.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
         $batch = app(ImportService::class)->upload($this->company, 'customers', $uploaded, $this->company->branches()->value('id'), $this->user);
@@ -89,6 +86,32 @@ class ImportExportFoundationTest extends TestCase
         file_put_contents($bad, 'not a workbook');
         $this->expectException(ValidationException::class);
         $parser->parse($bad, 'xlsx');
+    }
+
+    public function test_synthetic_edge_fixtures_match_parser_mapping_and_untrusted_text_rules(): void
+    {
+        $parser = app(FileParser::class);
+        $blankRows = $parser->parse($this->fixturePath('blank-rows.csv'), 'csv');
+        $this->assertCount(2, $blankRows['rows']);
+        $this->assertSame([2, 4], array_column($blankRows['rows'], 'number'));
+
+        $formulaText = $parser->parse($this->fixturePath('formula-injection-text.csv'), 'csv');
+        $this->assertSame('=SUM(1,1)', $formulaText['rows'][0]['values']['Customer Name']);
+        $this->assertSame('+TEST', $formulaText['rows'][0]['values']['Legal Name']);
+        $this->assertSame('@VALUE', $formulaText['rows'][0]['values']['Billing Address']);
+
+        $alternate = $parser->parse($this->fixturePath('customers-alternate-headers.csv'), 'csv');
+        $fields = app(ImportAdapterRegistry::class)->get('customers')->fields();
+        $suggestions = app(HeaderMapper::class)->suggestions($alternate['headers'], $fields);
+        $this->assertSame(['CustCode' => 'code', 'CustomerName' => 'name', 'Telephone' => 'phone', 'EmailAddress' => 'email'], $suggestions);
+
+        foreach (['empty.csv', 'headers-only.csv', 'duplicate-headers.csv'] as $fixture) {
+            $this->assertThrows(fn () => $parser->parse($this->fixturePath($fixture), 'csv'), ValidationException::class);
+        }
+
+        $repeated = $this->batch('customers', $this->fixture('repeated-customers.csv'), ['Customer Code' => 'code', 'Customer Name' => 'name']);
+        $this->assertSame(1, $repeated->duplicate_rows);
+        $this->assertSame(1, $repeated->valid_rows);
     }
 
     public function test_master_adapters_and_csv_xlsx_exports_are_entity_scoped_and_formula_safe(): void
@@ -263,5 +286,15 @@ class ImportExportFoundationTest extends TestCase
     private function account(string $code): int
     {
         return $this->company->accounts()->where('code', $code)->value('id');
+    }
+
+    private function fixture(string $filename): string
+    {
+        return file_get_contents($this->fixturePath($filename));
+    }
+
+    private function fixturePath(string $filename): string
+    {
+        return base_path('tests/Fixtures/ImportExport/'.$filename);
     }
 }

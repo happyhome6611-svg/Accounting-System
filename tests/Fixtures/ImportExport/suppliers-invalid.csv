@@ -1,0 +1,5 @@
+Supplier Code,Supplier Name,Email
+SUP001,Duplicate Harbour,duplicate@harbour.example
+SUP004,,missing-name@example.test
+SUP005,Broken Email,not-an-email
+SUP005,Broken Email,not-an-email

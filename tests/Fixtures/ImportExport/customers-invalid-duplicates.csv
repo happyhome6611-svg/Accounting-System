@@ -1,0 +1,5 @@
+Customer Code,Customer Name,Email,Extra Source Note
+CUST001,Duplicate Alpha,duplicate@alpha.example,Existing code
+CUST004,,missing-name@example.test,Required name omitted
+CUST005,Malformed Email,not-an-email,Email validation
+CUST005,Malformed Email,not-an-email,Email validation

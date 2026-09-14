@@ -1,0 +1,4 @@
+Code / SKU,Name,Description,Type,Unit,Sales Price,Purchase Price,Sales Account,Purchase Account,Default Sales Tax Code,Default Purchase Tax Code,Active
+SERV001,Advisory Session,Fictional professional service,service,hour,100.00,0.00,4000,5000,STANDARD,STANDARD,true
+PROD001,Printed Guide,Fictional printed guide,product,each,50.00,20.00,4000,5000,ZERO,ZERO,true
+SERV002,Support Package,Fictional support package,service,month,250.00,100.00,4000,5000,,,true

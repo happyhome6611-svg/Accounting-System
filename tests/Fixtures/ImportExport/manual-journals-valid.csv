@@ -1,0 +1,3 @@
+Journal Reference,Date,Account Code,Debit,Credit,Description,Branch Code
+JRN001,2027-03-01,1000,1000.00,0.00,Fictional capital introduced,MAIN
+JRN001,2027-03-01,3000,0.00,1000.00,Fictional capital introduced,MAIN
