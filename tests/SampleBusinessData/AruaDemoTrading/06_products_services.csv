@@ -1,0 +1,41 @@
+Code / SKU,Name,Description,Type,Unit,Sales Price,Purchase Price,Sales Account,Purchase Account,Default Sales Tax Code,Default Purchase Tax Code,Active
+PROD001,Demo Product 001,Fictional trading product 001,product,each,45.00,20.25,4010,5010,ZERO,ZERO,true
+PROD002,Demo Product 002,Fictional trading product 002,product,each,62.50,31.25,4010,5010,STANDARD,STANDARD,true
+PROD003,Demo Product 003,Fictional trading product 003,product,each,80.00,44.00,4030,5100,STANDARD,STANDARD,true
+PROD004,Demo Product 004,Fictional trading product 004,product,each,97.50,58.50,4010,5010,STANDARD,STANDARD,true
+PROD005,Demo Product 005,Fictional trading product 005,product,each,115.00,51.75,4010,5010,STANDARD,STANDARD,true
+PROD006,Demo Product 006,Fictional trading product 006,product,each,132.50,66.25,4030,5100,ZERO,STANDARD,true
+PROD007,Demo Product 007,Fictional trading product 007,product,each,150.00,82.50,4010,5010,STANDARD,ZERO,true
+PROD008,Demo Product 008,Fictional trading product 008,product,each,167.50,100.50,4010,5010,STANDARD,STANDARD,true
+PROD009,Demo Product 009,Fictional trading product 009,product,each,45.00,20.25,4030,5100,STANDARD,STANDARD,true
+PROD010,Demo Product 010,Fictional trading product 010,product,each,62.50,31.25,4010,5010,STANDARD,STANDARD,true
+PROD011,Demo Product 011,Fictional trading product 011,product,each,80.00,44.00,4010,5010,ZERO,STANDARD,true
+PROD012,Demo Product 012,Fictional trading product 012,product,each,97.50,58.50,4030,5100,STANDARD,STANDARD,true
+PROD013,Demo Product 013,Fictional trading product 013,product,each,115.00,51.75,4010,5010,STANDARD,ZERO,true
+PROD014,Demo Product 014,Fictional trading product 014,product,each,132.50,66.25,4010,5010,STANDARD,STANDARD,true
+PROD015,Demo Product 015,Fictional trading product 015,product,each,150.00,82.50,4030,5100,STANDARD,STANDARD,true
+PROD016,Demo Product 016,Fictional trading product 016,product,each,167.50,100.50,4010,5010,ZERO,STANDARD,true
+PROD017,Demo Product 017,Fictional trading product 017,product,each,45.00,20.25,4010,5010,STANDARD,STANDARD,true
+PROD018,Demo Product 018,Fictional trading product 018,product,each,62.50,31.25,4030,5100,STANDARD,STANDARD,true
+PROD019,Demo Product 019,Fictional trading product 019,product,each,80.00,44.00,4010,5010,STANDARD,ZERO,true
+PROD020,Demo Product 020,Fictional trading product 020,product,each,97.50,58.50,4010,5010,STANDARD,STANDARD,true
+PROD021,Demo Product 021,Fictional trading product 021,product,each,115.00,51.75,4030,5100,ZERO,STANDARD,true
+PROD022,Demo Product 022,Fictional trading product 022,product,each,132.50,66.25,4010,5010,STANDARD,STANDARD,true
+PROD023,Demo Product 023,Fictional trading product 023,product,each,150.00,82.50,4010,5010,STANDARD,STANDARD,true
+PROD024,Demo Product 024,Fictional trading product 024,product,each,167.50,100.50,4030,5100,STANDARD,STANDARD,true
+SERV001,Demo Service 001,Fictional consulting or support service 001,service,hour,85.00,29.75,4020,6110,ZERO,ZERO,true
+SERV002,Demo Service 002,Fictional consulting or support service 002,service,job,110.00,38.50,4020,6110,STANDARD,STANDARD,true
+SERV003,Demo Service 003,Fictional consulting or support service 003,service,job,135.00,47.25,4020,6110,STANDARD,STANDARD,true
+SERV004,Demo Service 004,Fictional consulting or support service 004,service,hour,160.00,56.00,4020,6110,STANDARD,STANDARD,true
+SERV005,Demo Service 005,Fictional consulting or support service 005,service,job,185.00,64.75,4020,6110,STANDARD,STANDARD,true
+SERV006,Demo Service 006,Fictional consulting or support service 006,service,job,210.00,73.50,4020,6110,STANDARD,STANDARD,true
+SERV007,Demo Service 007,Fictional consulting or support service 007,service,hour,235.00,82.25,4020,6110,STANDARD,STANDARD,true
+SERV008,Demo Service 008,Fictional consulting or support service 008,service,job,260.00,91.00,4020,6110,ZERO,ZERO,true
+SERV009,Demo Service 009,Fictional consulting or support service 009,service,job,85.00,29.75,4020,6110,STANDARD,STANDARD,true
+SERV010,Demo Service 010,Fictional consulting or support service 010,service,hour,110.00,38.50,4020,6110,STANDARD,STANDARD,true
+SERV011,Demo Service 011,Fictional consulting or support service 011,service,job,135.00,47.25,4020,6110,STANDARD,STANDARD,true
+SERV012,Demo Service 012,Fictional consulting or support service 012,service,job,160.00,56.00,4020,6110,STANDARD,STANDARD,true
+SERV013,Demo Service 013,Fictional consulting or support service 013,service,hour,185.00,64.75,4020,6110,STANDARD,STANDARD,true
+SERV014,Demo Service 014,Fictional consulting or support service 014,service,job,210.00,73.50,4020,6110,STANDARD,STANDARD,true
+SERV015,Demo Service 015,Fictional consulting or support service 015,service,job,235.00,82.25,4020,6110,ZERO,ZERO,true
+SERV016,Demo Service 016,Fictional consulting or support service 016,service,hour,260.00,91.00,4020,6110,STANDARD,STANDARD,true

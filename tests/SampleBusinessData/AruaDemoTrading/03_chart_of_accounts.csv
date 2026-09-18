@@ -1,0 +1,35 @@
+Account Code,Account Name,Account Type,Normal Balance,Parent Account Code,Active
+1010,Business Bank Account,asset,debit,,true
+1020,Petty Cash,asset,debit,,true
+1200,Input Tax Recoverable,asset,debit,,true
+1300,Prepayments,asset,debit,,true
+1400,Other Current Assets,asset,debit,,true
+1500,Office Equipment,asset,debit,,true
+1510,Computer Equipment,asset,debit,,true
+1520,Vehicles,asset,debit,,true
+2010,Trade Creditors Control,liability,credit,,true
+2100,Output Tax Payable,liability,credit,,true
+2200,Accrued Expenses,liability,credit,,true
+2300,Loan Payable,liability,credit,,true
+3010,Share Capital,equity,credit,,true
+3020,Retained Earnings,equity,credit,,true
+4010,Product Sales,income,credit,,true
+4020,Service Revenue,income,credit,,true
+4030,Delivery Income,income,credit,,true
+4040,Other Income,income,credit,,true
+5010,Product Purchases,expense,debit,,true
+5100,Freight and Delivery,expense,debit,,true
+5200,Rent,expense,debit,,true
+5300,Electricity,expense,debit,,true
+5400,Telephone,expense,debit,,true
+5410,Internet,expense,debit,,true
+5500,Office Supplies,expense,debit,,true
+5600,Advertising,expense,debit,,true
+5700,Insurance,expense,debit,,true
+5800,Travel,expense,debit,,true
+5810,Vehicle Expenses,expense,debit,,true
+5900,Repairs and Maintenance,expense,debit,,true
+6000,Bank Fees,expense,debit,,true
+6100,Professional Fees,expense,debit,,true
+6110,Contractor Expense,expense,debit,,true
+6200,Miscellaneous Expense,expense,debit,,true

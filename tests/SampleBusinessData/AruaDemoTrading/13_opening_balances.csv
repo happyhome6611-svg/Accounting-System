@@ -1,0 +1,10 @@
+Opening Balance Reference,Date,Account Code,Debit,Credit,Description
+OPENING-2025,2025-04-01,1010,50000.00,0.00,Opening business bank
+OPENING-2025,2025-04-01,1020,2000.00,0.00,Opening petty cash
+OPENING-2025,2025-04-01,1100,12000.00,0.00,Opening receivables
+OPENING-2025,2025-04-01,1300,3000.00,0.00,Opening prepayments
+OPENING-2025,2025-04-01,1500,30000.00,0.00,Opening equipment
+OPENING-2025,2025-04-01,2000,0.00,8000.00,Opening payables
+OPENING-2025,2025-04-01,2300,0.00,25000.00,Opening loan
+OPENING-2025,2025-04-01,3010,0.00,50000.00,Opening share capital
+OPENING-2025,2025-04-01,3020,0.00,14000.00,Opening retained earnings

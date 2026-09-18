@@ -1,0 +1,13 @@
+Setting,Value
+Tax Type,GST
+Registration Name,Arua Demo Trading Ltd
+Registration Number,DEMO-NZ-001
+Effective From,2025-04-01
+Effective To,2026-03-31
+Accounting Basis,accrual
+Filing Frequency,two_monthly
+Standard Code,STANDARD
+Standard Rate,15.00
+Zero-rated Code,ZERO
+Output Tax Account,2100
+Input Tax Account,1200

@@ -1,0 +1,26 @@
+Supplier Code,Supplier Name,Legal Name,Email,Phone,Address,Payment Terms Days,Credit Limit,Active
+SUP001,North Office Supplies 001 Ltd,North Office Supplies 001 Limited,billing001@demo-supplier.example,+64 21 50001,1 Sample Supplier Avenue,14,3400.00,true
+SUP002,South Telecommunications 002 Ltd,South Telecommunications 002 Limited,billing002@demo-supplier.example,+64 21 50002,2 Sample Supplier Avenue,30,3800.00,true
+SUP003,East Utilities 003 Ltd,East Utilities 003 Limited,billing003@demo-supplier.example,+64 21 50003,3 Sample Supplier Avenue,30,4200.00,true
+SUP004,West Equipment 004 Ltd,West Equipment 004 Limited,billing004@demo-supplier.example,+64 21 50004,4 Sample Supplier Avenue,30,4600.00,true
+SUP005,Central Freight 005 Ltd,Central Freight 005 Limited,billing005@demo-supplier.example,+64 21 50005,5 Sample Supplier Avenue,14,5000.00,true
+SUP006,North Professional Services 006 Ltd,North Professional Services 006 Limited,billing006@demo-supplier.example,+64 21 50006,6 Sample Supplier Avenue,30,5400.00,true
+SUP007,South Maintenance 007 Ltd,South Maintenance 007 Limited,billing007@demo-supplier.example,+64 21 50007,7 Sample Supplier Avenue,30,5800.00,true
+SUP008,East Advertising 008 Ltd,East Advertising 008 Limited,billing008@demo-supplier.example,+64 21 50008,8 Sample Supplier Avenue,30,6200.00,true
+SUP009,West Vehicle Services 009 Ltd,West Vehicle Services 009 Limited,billing009@demo-supplier.example,+64 21 50009,9 Sample Supplier Avenue,14,6600.00,true
+SUP010,Central Office Supplies 010 Ltd,Central Office Supplies 010 Limited,billing010@demo-supplier.example,+64 21 50010,10 Sample Supplier Avenue,30,7000.00,true
+SUP011,North Telecommunications 011 Ltd,North Telecommunications 011 Limited,billing011@demo-supplier.example,+64 21 50011,11 Sample Supplier Avenue,30,7400.00,true
+SUP012,South Utilities 012 Ltd,South Utilities 012 Limited,billing012@demo-supplier.example,+64 21 50012,12 Sample Supplier Avenue,30,7800.00,true
+SUP013,East Equipment 013 Ltd,East Equipment 013 Limited,billing013@demo-supplier.example,+64 21 50013,13 Sample Supplier Avenue,14,8200.00,true
+SUP014,West Freight 014 Ltd,West Freight 014 Limited,billing014@demo-supplier.example,+64 21 50014,14 Sample Supplier Avenue,30,8600.00,true
+SUP015,Central Professional Services 015 Ltd,Central Professional Services 015 Limited,billing015@demo-supplier.example,+64 21 50015,15 Sample Supplier Avenue,30,9000.00,true
+SUP016,North Maintenance 016 Ltd,North Maintenance 016 Limited,billing016@demo-supplier.example,+64 21 50016,16 Sample Supplier Avenue,30,9400.00,true
+SUP017,South Advertising 017 Ltd,South Advertising 017 Limited,billing017@demo-supplier.example,+64 21 50017,17 Sample Supplier Avenue,14,9800.00,true
+SUP018,East Vehicle Services 018 Ltd,East Vehicle Services 018 Limited,billing018@demo-supplier.example,+64 21 50018,18 Sample Supplier Avenue,30,10200.00,true
+SUP019,West Office Supplies 019 Ltd,West Office Supplies 019 Limited,billing019@demo-supplier.example,+64 21 50019,19 Sample Supplier Avenue,30,10600.00,true
+SUP020,Central Telecommunications 020 Ltd,Central Telecommunications 020 Limited,billing020@demo-supplier.example,+64 21 50020,20 Sample Supplier Avenue,30,11000.00,true
+SUP021,North Utilities 021 Ltd,North Utilities 021 Limited,billing021@demo-supplier.example,+64 21 50021,21 Sample Supplier Avenue,14,11400.00,true
+SUP022,South Equipment 022 Ltd,South Equipment 022 Limited,billing022@demo-supplier.example,+64 21 50022,22 Sample Supplier Avenue,30,11800.00,true
+SUP023,East Freight 023 Ltd,East Freight 023 Limited,billing023@demo-supplier.example,+64 21 50023,23 Sample Supplier Avenue,30,12200.00,true
+SUP024,West Professional Services 024 Ltd,West Professional Services 024 Limited,billing024@demo-supplier.example,+64 21 50024,24 Sample Supplier Avenue,30,12600.00,true
+SUP025,Central Maintenance 025 Ltd,Central Maintenance 025 Limited,billing025@demo-supplier.example,+64 21 50025,25 Sample Supplier Avenue,14,13000.00,true

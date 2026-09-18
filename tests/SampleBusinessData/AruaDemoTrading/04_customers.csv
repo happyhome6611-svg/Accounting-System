@@ -1,0 +1,51 @@
+Customer Code,Customer Name,Legal Name,Email,Phone,Billing Address,Payment Terms Days,Credit Limit,Active
+CUST001,Kauri Design 001 Ltd,Kauri Design 001 Limited,accounts001@demo-customer.example,+64 21 40001,1 Sample Customer Road,30,2250.00,true
+CUST002,Harbour Design 002 Ltd,Harbour Design 002 Limited,accounts002@demo-customer.example,+64 21 40002,2 Sample Customer Road,30,2500.00,true
+CUST003,Southern Design 003 Ltd,Southern Design 003 Limited,accounts003@demo-customer.example,+64 21 40003,3 Sample Customer Road,14,2750.00,true
+CUST004,Tui Design 004 Ltd,Tui Design 004 Limited,accounts004@demo-customer.example,+64 21 40004,4 Sample Customer Road,30,3000.00,true
+CUST005,Rimu Design 005 Ltd,Rimu Design 005 Limited,accounts005@demo-customer.example,+64 21 40005,5 Sample Customer Road,30,3250.00,true
+CUST006,Pacific Design 006 Ltd,Pacific Design 006 Limited,accounts006@demo-customer.example,+64 21 40006,6 Sample Customer Road,14,3500.00,true
+CUST007,Fictional Customer 007,Fictional Customer 007,accounts007@demo-customer.example,+64 21 40007,7 Sample Customer Road,30,3750.00,true
+CUST008,Summit Design 008 Ltd,Summit Design 008 Limited,accounts008@demo-customer.example,+64 21 40008,8 Sample Customer Road,30,4000.00,true
+CUST009,Coastal Design 009 Ltd,Coastal Design 009 Limited,accounts009@demo-customer.example,+64 21 40009,9 Sample Customer Road,14,4250.00,true
+CUST010,Pohutukawa Design 010 Ltd,Pohutukawa Design 010 Limited,accounts010@demo-customer.example,+64 21 40010,10 Sample Customer Road,30,4500.00,true
+CUST011,Kauri Engineering 011 Ltd,Kauri Engineering 011 Limited,accounts011@demo-customer.example,+64 21 40011,11 Sample Customer Road,30,4750.00,true
+CUST012,Harbour Engineering 012 Ltd,Harbour Engineering 012 Limited,accounts012@demo-customer.example,+64 21 40012,12 Sample Customer Road,14,5000.00,true
+CUST013,Southern Engineering 013 Ltd,Southern Engineering 013 Limited,accounts013@demo-customer.example,+64 21 40013,13 Sample Customer Road,30,5250.00,true
+CUST014,Fictional Customer 014,Fictional Customer 014,accounts014@demo-customer.example,+64 21 40014,14 Sample Customer Road,30,5500.00,true
+CUST015,Rimu Engineering 015 Ltd,Rimu Engineering 015 Limited,accounts015@demo-customer.example,+64 21 40015,15 Sample Customer Road,14,5750.00,true
+CUST016,Pacific Engineering 016 Ltd,Pacific Engineering 016 Limited,accounts016@demo-customer.example,+64 21 40016,16 Sample Customer Road,30,6000.00,true
+CUST017,Fern Engineering 017 Ltd,Fern Engineering 017 Limited,accounts017@demo-customer.example,+64 21 40017,17 Sample Customer Road,30,6250.00,true
+CUST018,Summit Engineering 018 Ltd,Summit Engineering 018 Limited,accounts018@demo-customer.example,+64 21 40018,18 Sample Customer Road,14,6500.00,true
+CUST019,Coastal Engineering 019 Ltd,Coastal Engineering 019 Limited,accounts019@demo-customer.example,+64 21 40019,19 Sample Customer Road,30,6750.00,true
+CUST020,Pohutukawa Engineering 020 Ltd,Pohutukawa Engineering 020 Limited,accounts020@demo-customer.example,+64 21 40020,20 Sample Customer Road,30,7000.00,true
+CUST021,Fictional Customer 021,Fictional Customer 021,accounts021@demo-customer.example,+64 21 40021,21 Sample Customer Road,14,7250.00,true
+CUST022,Harbour Hospitality 022 Ltd,Harbour Hospitality 022 Limited,accounts022@demo-customer.example,+64 21 40022,22 Sample Customer Road,30,7500.00,true
+CUST023,Southern Hospitality 023 Ltd,Southern Hospitality 023 Limited,accounts023@demo-customer.example,+64 21 40023,23 Sample Customer Road,30,7750.00,true
+CUST024,Tui Hospitality 024 Ltd,Tui Hospitality 024 Limited,accounts024@demo-customer.example,+64 21 40024,24 Sample Customer Road,14,8000.00,true
+CUST025,Rimu Hospitality 025 Ltd,Rimu Hospitality 025 Limited,accounts025@demo-customer.example,+64 21 40025,25 Sample Customer Road,30,8250.00,true
+CUST026,Pacific Hospitality 026 Ltd,Pacific Hospitality 026 Limited,accounts026@demo-customer.example,+64 21 40026,26 Sample Customer Road,30,8500.00,true
+CUST027,Fern Hospitality 027 Ltd,Fern Hospitality 027 Limited,accounts027@demo-customer.example,+64 21 40027,27 Sample Customer Road,14,8750.00,true
+CUST028,Fictional Customer 028,Fictional Customer 028,accounts028@demo-customer.example,+64 21 40028,28 Sample Customer Road,30,9000.00,true
+CUST029,Coastal Hospitality 029 Ltd,Coastal Hospitality 029 Limited,accounts029@demo-customer.example,+64 21 40029,29 Sample Customer Road,30,9250.00,true
+CUST030,Pohutukawa Hospitality 030 Ltd,Pohutukawa Hospitality 030 Limited,accounts030@demo-customer.example,+64 21 40030,30 Sample Customer Road,14,9500.00,true
+CUST031,Kauri Property 031 Ltd,Kauri Property 031 Limited,accounts031@demo-customer.example,+64 21 40031,31 Sample Customer Road,30,9750.00,true
+CUST032,Harbour Property 032 Ltd,Harbour Property 032 Limited,accounts032@demo-customer.example,+64 21 40032,32 Sample Customer Road,30,10000.00,true
+CUST033,Southern Property 033 Ltd,Southern Property 033 Limited,accounts033@demo-customer.example,+64 21 40033,33 Sample Customer Road,14,10250.00,true
+CUST034,Tui Property 034 Ltd,Tui Property 034 Limited,accounts034@demo-customer.example,+64 21 40034,34 Sample Customer Road,30,10500.00,true
+CUST035,Fictional Customer 035,Fictional Customer 035,accounts035@demo-customer.example,+64 21 40035,35 Sample Customer Road,30,10750.00,true
+CUST036,Pacific Property 036 Ltd,Pacific Property 036 Limited,accounts036@demo-customer.example,+64 21 40036,36 Sample Customer Road,14,11000.00,true
+CUST037,Fern Property 037 Ltd,Fern Property 037 Limited,accounts037@demo-customer.example,+64 21 40037,37 Sample Customer Road,30,11250.00,true
+CUST038,Summit Property 038 Ltd,Summit Property 038 Limited,accounts038@demo-customer.example,+64 21 40038,38 Sample Customer Road,30,11500.00,true
+CUST039,Coastal Property 039 Ltd,Coastal Property 039 Limited,accounts039@demo-customer.example,+64 21 40039,39 Sample Customer Road,14,11750.00,true
+CUST040,Pohutukawa Property 040 Ltd,Pohutukawa Property 040 Limited,accounts040@demo-customer.example,+64 21 40040,40 Sample Customer Road,30,12000.00,true
+CUST041,Kauri Advisory 041 Ltd,Kauri Advisory 041 Limited,accounts041@demo-customer.example,+64 21 40041,41 Sample Customer Road,30,12250.00,true
+CUST042,Fictional Customer 042,Fictional Customer 042,accounts042@demo-customer.example,+64 21 40042,42 Sample Customer Road,14,12500.00,true
+CUST043,Southern Advisory 043 Ltd,Southern Advisory 043 Limited,accounts043@demo-customer.example,+64 21 40043,43 Sample Customer Road,30,12750.00,true
+CUST044,Tui Advisory 044 Ltd,Tui Advisory 044 Limited,accounts044@demo-customer.example,+64 21 40044,44 Sample Customer Road,30,13000.00,true
+CUST045,Rimu Advisory 045 Ltd,Rimu Advisory 045 Limited,accounts045@demo-customer.example,+64 21 40045,45 Sample Customer Road,14,13250.00,true
+CUST046,Pacific Advisory 046 Ltd,Pacific Advisory 046 Limited,accounts046@demo-customer.example,+64 21 40046,46 Sample Customer Road,30,13500.00,true
+CUST047,Fern Advisory 047 Ltd,Fern Advisory 047 Limited,accounts047@demo-customer.example,+64 21 40047,47 Sample Customer Road,30,13750.00,true
+CUST048,Summit Advisory 048 Ltd,Summit Advisory 048 Limited,accounts048@demo-customer.example,+64 21 40048,48 Sample Customer Road,14,14000.00,true
+CUST049,Fictional Customer 049,Fictional Customer 049,accounts049@demo-customer.example,+64 21 40049,49 Sample Customer Road,30,14250.00,true
+CUST050,Pohutukawa Advisory 050 Ltd,Pohutukawa Advisory 050 Limited,accounts050@demo-customer.example,+64 21 40050,50 Sample Customer Road,30,14500.00,true
