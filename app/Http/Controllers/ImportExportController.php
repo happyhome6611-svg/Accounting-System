@@ -7,9 +7,11 @@ use App\ImportExport\HeaderMapper;
 use App\ImportExport\ImportAdapterRegistry;
 use App\ImportExport\ImportService;
 use App\Models\Company;
+use App\Models\EntityImportBatch;
 use App\Models\ImportBatch;
 use App\Models\ImportProfile;
 use App\Services\CountryJurisdictionService;
+use App\Services\EntityImportService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -18,7 +20,7 @@ class ImportExportController extends Controller
 {
     public function index(Request $request, CountryJurisdictionService $jurisdictions)
     {
-        return view('import-export.index', ['countries' => $jurisdictions->countriesFor($request->user(), false)]);
+        return view('import-export.index', ['countries' => $jurisdictions->countriesFor($request->user())]);
     }
 
     public function country(Request $request, string $country, CountryJurisdictionService $jurisdictions)
@@ -26,6 +28,60 @@ class ImportExportController extends Controller
         $country = $jurisdictions->country($country);
 
         return view('import-export.country', ['country' => $country, 'companies' => $jurisdictions->entities($request->user(), $country)]);
+    }
+
+    public function entityImportCreate(Request $request, string $country, CountryJurisdictionService $jurisdictions)
+    {
+        $country = $jurisdictions->country($country);
+
+        return view('import-export.entity-import-create', compact('country'));
+    }
+
+    public function entityImportUpload(Request $request, string $country, CountryJurisdictionService $jurisdictions, EntityImportService $service)
+    {
+        $country = $jurisdictions->country($country);
+        $data = $request->validate(['file' => ['required', 'file', 'max:'.config('imports.max_file_kb'), 'mimes:csv,xlsx']]);
+        $batch = $service->upload($country, $data['file'], $request->user());
+
+        return redirect()->route('import-export.entity-imports.show', [$country->code, $batch]);
+    }
+
+    public function entityImportShow(Request $request, string $country, EntityImportBatch $batch, CountryJurisdictionService $jurisdictions, EntityImportService $service)
+    {
+        $country = $jurisdictions->country($country);
+        $service->authorize($batch, $request->user());
+        abort_unless($batch->country_id === $country->id, 404);
+
+        return view('import-export.entity-import-batch', ['country' => $country, 'batch' => $batch->load('resultCompany'), 'fields' => $service->fields()]);
+    }
+
+    public function entityImportWorksheet(Request $request, string $country, EntityImportBatch $batch, CountryJurisdictionService $jurisdictions, EntityImportService $service)
+    {
+        $country = $jurisdictions->country($country);
+        $service->authorize($batch, $request->user());
+        abort_unless($batch->country_id === $country->id, 404);
+        $service->selectWorksheet($batch, $request->validate(['worksheet' => 'required|string'])['worksheet']);
+
+        return back()->with('success', 'Worksheet selected. Map the entity fields.');
+    }
+
+    public function entityImportValidate(Request $request, string $country, EntityImportBatch $batch, CountryJurisdictionService $jurisdictions, EntityImportService $service)
+    {
+        $country = $jurisdictions->country($country);
+        $service->authorize($batch, $request->user());
+        abort_unless($batch->country_id === $country->id, 404);
+        $service->validate($batch, $request->validate(['mapping' => 'required|array', 'mapping.*' => 'nullable|string|max:80'])['mapping'], $request->user());
+
+        return back()->with('success', 'Validation completed. Review the preview before confirming.');
+    }
+
+    public function entityImportConfirm(Request $request, string $country, EntityImportBatch $batch, CountryJurisdictionService $jurisdictions, EntityImportService $service)
+    {
+        $country = $jurisdictions->country($country);
+        abort_unless($batch->country_id === $country->id, 404);
+        $service->confirm($batch, $request->user());
+
+        return back()->with('success', 'Accounting Entity successfully imported.');
     }
 
     public function workspace(Request $request, string $country, Company $company, ImportAdapterRegistry $imports, ExportService $exports)

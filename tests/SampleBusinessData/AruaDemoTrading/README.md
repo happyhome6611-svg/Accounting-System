@@ -2,9 +2,15 @@
 
 Realistic fictional sample business data for manual testing of Arua Accounting System v0.8.
 
-## Manual setup
+## Accounting Entity import
 
-1. Create **Arua Demo Trading Ltd** as a Company in New Zealand with NZD, Pacific/Auckland, and financial year 1 April 2025 to 31 March 2026.
+Use `00_accounting_entity_import.csv` from **Import & Export → New Zealand → Import New Accounting Entity**. Validate the mapped fields and explicitly confirm creation. This creates the Company, its standard Head Office branch, financial year, accounting periods, ownership, and system accounts through Arua's normal Accounting Entity creation service.
+
+After creation, open **Import Data Into This Entity**. Create the additional `AKL` and `WLG` branches from `02_branches_reference.csv`, configure generic tax from `02_tax_setup_reference.csv`, and continue with the import order below. The entity import does not create transactions, additional branches, bank accounts, or tax configuration.
+
+## Manual setup alternative
+
+1. If not using the entity import file, manually create **Arua Demo Trading Ltd** as a Company in New Zealand with NZD, Pacific/Auckland, and financial year 1 April 2025 to 31 March 2026.
 2. The application creates branch `HO` and system accounts 1000, 1100, 2000, 3000, 4000, and 5000. Create active branches `AKL` (Auckland) and `WLG` (Wellington).
 3. Configure the generic v0.7 tax registration using `02_tax_setup_reference.csv`: STANDARD 15%, ZERO zero-rated, output account 2100, input account 1200. This is generic test configuration, not NZ GST-return logic.
 4. Create an active NZD bank account linked to ledger account 1010 before importing the bank statement.

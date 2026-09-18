@@ -13,6 +13,7 @@ use App\Models\Currency;
 use App\Models\ImportBatch;
 use App\Models\User;
 use App\Services\CompanyCreator;
+use App\Services\EntityImportService;
 use App\Services\JournalService;
 use App\Services\SalesService;
 use App\Services\SupplierMaintenanceService;
@@ -241,6 +242,57 @@ class ImportExportFoundationTest extends TestCase
             ->assertSee('Import Another File')
             ->assertSee('Return to Import & Export', false);
         $this->assertDatabaseHas('customers', ['company_id' => $this->company->id, 'code' => 'WEB001']);
+    }
+
+    public function test_new_accounting_entity_import_workflow_uses_normal_creation_rules_and_is_idempotent(): void
+    {
+        $service = app(EntityImportService::class);
+        $country = Country::where('code', 'NZ')->firstOrFail();
+        $this->actingAs($this->user)->get(route('import-export'))->assertSee('Import New Accounting Entity')->assertSee('Import Data Into Existing Entity');
+        $this->get(route('import-export.country', 'NZ'))->assertSee('+ Import New Accounting Entity')->assertSee('Existing Accounting Entities');
+
+        foreach ([['Company', 'Arua Demo Trading Ltd', 1], ['Sole Trader', 'Imported Trader', 1], ['Individual', 'Imported Person', 0]] as [$type, $name, $branches]) {
+            $csv = "Entity Name,Entity Type,Country,Base Currency,Timezone,Financial Year Start,Financial Year End\n{$name},{$type},NZ,NZD,Pacific/Auckland,2025-04-01,2026-03-31\n";
+            $batch = $service->upload($country, UploadedFile::fake()->createWithContent(str($name)->slug().'.csv', $csv), $this->user);
+            $this->assertSame('mapping', $batch->status);
+            $batch = $service->validate($batch, $batch->mapping, $this->user);
+            $this->assertSame('ready', $batch->status);
+            $this->assertSame('not_duplicate', $batch->duplicate_status);
+            $entity = $service->confirm($batch, $this->user);
+            $this->assertSame($entity->id, $service->confirm($batch->fresh(), $this->user)->id);
+            $this->assertSame($branches, $entity->branches()->count());
+            $this->assertTrue($this->user->companies()->whereKey($entity->id)->exists());
+            $this->get(route('import-export.workspace', ['NZ', $entity]))->assertOk()->assertSee($name);
+            $this->get(route('import-export.entity-imports.show', ['NZ', $batch->fresh()]))->assertOk()->assertSee('Accounting Entity successfully imported.')->assertSee('Import Data Into This Entity')->assertSee(route('import-export.workspace', ['NZ', $entity]), false);
+        }
+
+        $this->assertDatabaseHas('audit_logs', ['event' => 'accounting_entity.imported']);
+    }
+
+    public function test_entity_import_rejects_jurisdiction_type_duplicates_and_foreign_batches_and_exports_setup(): void
+    {
+        $service = app(EntityImportService::class);
+        $country = Country::where('code', 'NZ')->firstOrFail();
+        $mapping = ['Entity Name' => 'entity_name', 'Entity Type' => 'entity_type', 'Country' => 'country', 'Financial Year Start' => 'financial_year_start', 'Financial Year End' => 'financial_year_end'];
+        foreach ([
+            "Entity Name,Entity Type,Country,Financial Year Start,Financial Year End\nWrong Country,Company,AU,2025-04-01,2026-03-31\n",
+            "Entity Name,Entity Type,Country,Financial Year Start,Financial Year End\nWrong Type,Trust,NZ,2025-04-01,2026-03-31\n",
+            "Entity Name,Entity Type,Country,Financial Year Start,Financial Year End\nImport Company,Company,NZ,2025-04-01,2026-03-31\n",
+        ] as $index => $csv) {
+            $batch = $service->upload($country, UploadedFile::fake()->createWithContent("invalid-{$index}.csv", $csv), $this->user);
+            $batch = $service->validate($batch, $mapping, $this->user);
+            $this->assertSame('mapping', $batch->status);
+            $this->assertNotEmpty($batch->errors);
+        }
+        $this->assertSame('exact_duplicate', $batch->duplicate_status);
+        $foreign = User::factory()->create();
+        $this->actingAs($foreign)->get(route('import-export.entity-imports.show', ['NZ', $batch]))->assertNotFound();
+
+        $file = app(ExportService::class)->generate($this->company, 'accounting_entity', 'csv', [], $this->user);
+        $contents = file_get_contents($file['path']);
+        $this->assertStringContainsString('Entity Name', $contents);
+        $this->assertStringContainsString($this->company->entity_label, $contents);
+        @unlink($file['path']);
     }
 
     public function test_balanced_journal_import_financial_exports_and_opening_balance_staging_obey_ledger_controls(): void

@@ -4,6 +4,8 @@
 <nav aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="{{ route('import-export') }}">Import & Export</a></li><li class="breadcrumb-item active">{{ $country->name }}</li></ol></nav>
 <h1>{{ $country->name }} Import & Export</h1>
 <p class="text-muted">Select the Accounting Entity whose data you want to import or export.</p>
+<div class="card card-body border-primary mb-4"><div class="d-flex flex-wrap justify-content-between align-items-center gap-3"><div><h2 class="h5 mb-1">Import New Accounting Entity</h2><span class="text-muted">Create a new Company, Sole Trader, or Individual in {{ $country->name }} from CSV or XLSX.</span></div><a class="btn btn-primary" href="{{ route('import-export.entity-imports.create', $country->code) }}">+ Import New Accounting Entity</a></div></div>
+<h2 class="h4">Existing Accounting Entities</h2>
 <div class="row g-3">
     @forelse($companies as $company)
         <div class="col-md-6 col-xl-4">

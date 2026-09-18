@@ -173,6 +173,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/tax/{country}/entities/{company}/adjustments', [TaxController::class, 'adjustment'])->name('tax.adjustments.store');
     Route::get('/import-export', [ImportExportController::class, 'index'])->name('import-export');
     Route::get('/import-export/{country}', [ImportExportController::class, 'country'])->name('import-export.country');
+    Route::get('/import-export/{country}/entity-imports/create', [ImportExportController::class, 'entityImportCreate'])->name('import-export.entity-imports.create');
+    Route::post('/import-export/{country}/entity-imports', [ImportExportController::class, 'entityImportUpload'])->name('import-export.entity-imports.upload');
+    Route::get('/import-export/{country}/entity-imports/{batch}', [ImportExportController::class, 'entityImportShow'])->name('import-export.entity-imports.show');
+    Route::post('/import-export/{country}/entity-imports/{batch}/worksheet', [ImportExportController::class, 'entityImportWorksheet'])->name('import-export.entity-imports.worksheet');
+    Route::post('/import-export/{country}/entity-imports/{batch}/validate', [ImportExportController::class, 'entityImportValidate'])->name('import-export.entity-imports.validate');
+    Route::post('/import-export/{country}/entity-imports/{batch}/confirm', [ImportExportController::class, 'entityImportConfirm'])->name('import-export.entity-imports.confirm');
     Route::get('/import-export/{country}/entities/{company}', [ImportExportController::class, 'workspace'])->name('import-export.workspace');
     Route::get('/import-export/{country}/entities/{company}/imports/create', [ImportExportController::class, 'create'])->name('import-export.imports.create');
     Route::post('/import-export/{country}/entities/{company}/imports', [ImportExportController::class, 'upload'])->name('import-export.imports.upload');

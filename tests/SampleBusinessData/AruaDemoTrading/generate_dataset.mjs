@@ -42,6 +42,9 @@ const businessDate = (index, salt = 0) => {
 const files = new Map();
 const writeCsv = (name, headers, rows, meta) => files.set(name, { headers, rows, meta, content: csv([headers, ...rows]) });
 
+writeCsv("00_accounting_entity_import.csv", ["Entity Name", "Entity Type", "Legal Name", "Country / Jurisdiction", "Base Currency", "Timezone", "Financial Year Start", "Financial Year End", "Address", "Email", "Phone"], [["Arua Demo Trading Ltd", "Company", "Arua Demo Trading Ltd", "NZ", "NZD", "Pacific/Auckland", "2025-04-01", "2026-03-31", "18 Example Quay, Auckland 1010", "accounts@aruademotrading.example", "+64 9 555 0100"]],
+  { importable: true, type: "accounting entity import", purpose: "Creates the sample Company through the standard entity workflow" });
+
 const systemAccounts = [
   ["1000", "Cash and Cash Equivalents", "asset"], ["1100", "Accounts Receivable", "asset"],
   ["2000", "Accounts Payable", "liability"], ["3000", "Owner Equity", "equity"],
@@ -395,6 +398,7 @@ const controlMarkdown = [
 
 const manifestRows = [...files.entries()].map(([name, file]) => [name, file.rows.length, file.meta.importable ? "Yes" : "No", file.meta.type ?? "Reference/manual workflow", file.meta.purpose]);
 const usageRows = [
+  ["00_accounting_entity_import.csv", "Select New Zealand jurisdiction", "Create Arua Demo Trading Ltd through the standard entity creation workflow", "Direct entity import"],
   ["01_company_setup_reference.csv", "None", "Manually create the correctly scoped NZD company and financial year", "Reference only"],
   ["02_branches_reference.csv", "Company exists", "Create AKL and WLG branches", "Reference only"],
   ["02_tax_setup_reference.csv", "Company and tax control accounts exist", "Configure the generic v0.7 registration, codes, and 15%/zero rates", "Reference only"],
@@ -414,6 +418,7 @@ const usageRows = [
 ];
 const readme = [
   "# Arua Demo Trading Ltd", "", "Realistic fictional sample business data for manual testing of Arua Accounting System v0.8.", "",
+  "## Accounting Entity import", "", "Use `00_accounting_entity_import.csv` from **Import & Export → New Zealand → Import New Accounting Entity**. Validate the mapped fields and explicitly confirm creation. This creates the Company, its standard Head Office branch, financial year, accounting periods, ownership, and system accounts through Arua's normal Accounting Entity creation service.", "", "After creation, open **Import Data Into This Entity**. Create the additional `AKL` and `WLG` branches from `02_branches_reference.csv`, configure generic tax from `02_tax_setup_reference.csv`, and continue with the import order below. The entity import does not create transactions, additional branches, bank accounts, or tax configuration.", "",
   "## Manual setup", "", "1. Create **Arua Demo Trading Ltd** as a Company in New Zealand with NZD, Pacific/Auckland, and financial year 1 April 2025 to 31 March 2026.",
   "2. The application creates branch `HO` and system accounts 1000, 1100, 2000, 3000, 4000, and 5000. Create active branches `AKL` (Auckland) and `WLG` (Wellington).",
   "3. Configure the generic v0.7 tax registration using `02_tax_setup_reference.csv`: STANDARD 15%, ZERO zero-rated, output account 2100, input account 1200. This is generic test configuration, not NZ GST-return logic.",
