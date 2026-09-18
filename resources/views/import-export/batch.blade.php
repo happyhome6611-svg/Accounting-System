@@ -1,15 +1,68 @@
 @extends('layouts.app')
 @section('title', 'Import Batch')
 @section('content')
-<div class="d-flex justify-content-between"><div><h1>Import Batch #{{ $batch->id }}</h1><p class="text-muted">{{ $company->entity_label }} · {{ $batch->original_filename }} · {{ str($batch->status)->replace('_',' ')->title() }}</p></div><a href="{{ route('import-export.workspace', [$company->country->code, $company]) }}">Back to Workspace</a></div>
-@if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
-@if($batch->options['same_file_warning'] ?? false)<div class="alert alert-warning">This exact file was previously imported. Existing imported row fingerprints will be treated as duplicates.</div>@endif
-@if($batch->status === 'uploaded')<div class="card card-body"><h2 class="h5">Select Worksheet</h2><form method="post" action="{{ route('import-export.batches.worksheet', [$company->country->code, $company, $batch]) }}">@csrf<select class="form-select mb-3" name="worksheet" required><option value="">Choose worksheet</option>@foreach($batch->options['worksheets'] ?? [] as $sheet)<option>{{ $sheet }}</option>@endforeach</select><button class="btn btn-primary">Inspect Columns</button></form></div>@endif
-@if(in_array($batch->status, ['mapping','validated','ready']))<div class="card card-body mb-4"><h2 class="h5">Column Mapping and Options</h2>@if($profiles->isNotEmpty())<div class="mb-3"><label class="form-label">Compatible Saved Profile</label><select id="compatible-profile" class="form-select"><option value="">Review current suggestions</option>@foreach($profiles as $profile)<option value="{{ base64_encode(json_encode($profile->mapping)) }}">{{ $profile->name }}</option>@endforeach</select></div>@endif<form method="post" action="{{ route('import-export.batches.validate', [$company->country->code, $company, $batch]) }}">@csrf<div class="row g-3">@foreach($batch->source_headers as $header)<div class="col-md-6"><label class="form-label">{{ $header }}</label><select class="form-select import-mapping" data-source="{{ $header }}" name="mapping[{{ $header }}]"><option value="">Ignore column</option>@foreach($fields as $key=>$field)<option value="{{ $key }}" @selected(($batch->mapping[$header] ?? null)===$key)>{{ $field['label'] }}{{ $field['required'] ? ' *' : '' }}</option>@endforeach</select></div>@endforeach@if(in_array($batch->data_type, ['sales_invoices','supplier_bills','manual_journals']))<div class="col-md-6"><label class="form-label">Posting Mode</label><select name="posting_mode" class="form-select"><option value="draft">Import as Draft (recommended)</option><option value="post">Import and Post using existing accounting controls</option></select></div>@endif</div><button class="btn btn-primary mt-3">Validate and Preview</button></form></div>@endif
-@if($batch->total_rows)<div class="row g-2 mb-3">@foreach(['Total'=>$batch->total_rows,'Valid'=>$batch->valid_rows,'Warnings'=>$batch->warning_rows,'Errors'=>$batch->invalid_rows,'Duplicates'=>$batch->duplicate_rows,'Imported'=>$batch->imported_rows,'Failed'=>$batch->failed_rows] as $label=>$count)<div class="col"><div class="card card-body text-center"><strong>{{ $count }}</strong><small>{{ $label }}</small></div></div>@endforeach</div><div class="card"><div class="card-header d-flex flex-wrap gap-2 align-items-center"><span class="me-2">Preview filter:</span>@foreach(['all'=>'All rows','warning'=>'Warnings','error'=>'Errors','duplicate'=>'Duplicates'] as $filter=>$label)<button type="button" class="btn btn-sm {{ $filter === 'all' ? 'btn-primary' : 'btn-outline-primary' }} import-row-filter" data-filter="{{ $filter }}">{{ $label }}</button>@endforeach</div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Row</th><th>Status</th><th>Duplicate</th><th>Mapped Values</th><th>Warnings / Errors</th><th>Result</th></tr></thead><tbody>@foreach($batch->rows->take(config('imports.preview_rows')) as $row)<tr class="import-preview-row" data-warning="{{ $row->warnings ? '1' : '0' }}" data-error="{{ $row->errors ? '1' : '0' }}" data-duplicate="{{ $row->duplicate_status !== 'none' ? '1' : '0' }}"><td>{{ $row->source_row_number }}</td><td>{{ $row->validation_status }}</td><td>{{ $row->duplicate_status }}</td><td><small>{{ json_encode($row->mapped_values ?: $row->raw_values) }}</small></td><td class="text-danger">{{ implode('; ', [...$row->warnings, ...$row->errors]) }}</td><td>{{ $row->result_model ? class_basename($row->result_model).' #'.$row->result_id : '' }}</td></tr>@endforeach</tbody></table></div></div>@endif
-@if($batch->data_type === 'opening_balances' && $batch->status === 'ready')<div class="alert alert-info mt-3">Balanced Opening Balance staging is ready. Ledger posting is intentionally deferred to a later controlled workflow.</div>@endif
-<div class="d-flex gap-2 mt-3">@if($batch->status === 'ready' && $batch->data_type !== 'opening_balances')<form method="post" action="{{ route('import-export.batches.confirm', [$company->country->code, $company, $batch]) }}" onsubmit="return confirm('Confirm this import? Valid non-duplicate rows will create production records.')">@csrf<button class="btn btn-success">Confirm Import</button></form>@endif@if(in_array($batch->status,['uploaded','mapping','validated','ready']))<form method="post" action="{{ route('import-export.batches.cancel', [$company->country->code, $company, $batch]) }}">@csrf<button class="btn btn-outline-danger">Cancel Import</button></form>@endif@if($batch->invalid_rows || $batch->failed_rows)<a class="btn btn-outline-secondary" href="{{ route('import-export.batches.errors', [$company->country->code, $company, $batch]) }}">Download Errors CSV</a>@endif</div>
-@if(in_array($batch->status,['validated','ready']))<div class="card card-body mt-3"><form method="post" action="{{ route('import-export.profiles.store', [$company->country->code,$company]) }}">@csrf<input type="hidden" name="data_type" value="{{ $batch->data_type }}">@foreach($batch->source_headers as $i=>$header)<input type="hidden" name="source_headers[{{ $i }}]" value="{{ $header }}">@endforeach @foreach($batch->mapping as $source=>$target)<input type="hidden" name="mapping[{{ $source }}]" value="{{ $target }}">@endforeach<label class="form-label">Save this mapping as an entity-scoped Import Profile</label><div class="input-group"><input class="form-control" name="name" required placeholder="Profile name"><button class="btn btn-outline-primary">Save Profile</button></div></form></div>@endif
+<nav aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="{{ route('import-export') }}">Import & Export</a></li><li class="breadcrumb-item"><a href="{{ route('import-export.country', $company->country->code) }}">{{ $company->country->name }}</a></li><li class="breadcrumb-item"><a href="{{ route('import-export.workspace', [$company->country->code, $company]) }}">{{ $company->entity_label }}</a></li><li class="breadcrumb-item active">Import Batch #{{ $batch->id }}</li></ol></nav>
+<div class="d-flex flex-wrap justify-content-between gap-3"><div><h1>Import Batch #{{ $batch->id }}</h1><p class="text-muted">{{ $company->country->name }} · {{ $company->entity_label }} · {{ str($company->entity_type)->replace('_', ' ')->title() }} · {{ $batch->original_filename }} · {{ str($batch->status)->replace('_', ' ')->title() }}</p></div><a class="btn btn-outline-secondary align-self-start" href="{{ route('import-export.workspace', [$company->country->code, $company]) }}">Back to Workspace</a></div>
+
+@if(session('success'))
+<div class="alert alert-success">{{ session('success') }}</div>
+@endif
+@if($batch->options['same_file_warning'] ?? false)
+<div class="alert alert-warning">This exact file was previously imported. Existing imported row fingerprints will be treated as duplicates.</div>
+@endif
+
+@if($batch->status === 'uploaded')
+<div class="card card-body"><h2 class="h5">Select Worksheet</h2><form method="post" action="{{ route('import-export.batches.worksheet', [$company->country->code, $company, $batch]) }}">@csrf<select class="form-select mb-3" name="worksheet" required><option value="">Choose worksheet</option>@foreach($batch->options['worksheets'] ?? [] as $sheet)<option>{{ $sheet }}</option>@endforeach</select><button class="btn btn-primary">Inspect Columns</button></form></div>
+@endif
+
+@if(in_array($batch->status, ['mapping', 'validated', 'ready']))
+<div class="card card-body mb-4"><h2 class="h5">Column Mapping and Options</h2><p class="text-muted">Source Column → Arua Field. Fields marked * are required; choose Ignore column for data that should not be imported.</p>
+@if($profiles->isNotEmpty())
+<div class="mb-3"><label class="form-label">Compatible Saved Profile</label><select id="compatible-profile" class="form-select"><option value="">Review current suggestions</option>@foreach($profiles as $profile)<option value="{{ base64_encode(json_encode($profile->mapping)) }}">{{ $profile->name }}</option>@endforeach</select></div>
+@endif
+<form method="post" action="{{ route('import-export.batches.validate', [$company->country->code, $company, $batch]) }}">@csrf<div class="row g-3">
+@foreach($batch->source_headers as $header)
+<div class="col-md-6"><label class="form-label">{{ $header }}</label><select class="form-select import-mapping" data-source="{{ $header }}" name="mapping[{{ $header }}]"><option value="">Ignore column</option>@foreach($fields as $key => $field)<option value="{{ $key }}" @selected(($batch->mapping[$header] ?? null) === $key)>{{ $field['label'] }}{{ $field['required'] ? ' *' : '' }}</option>@endforeach</select></div>
+@endforeach
+@if(in_array($batch->data_type, ['sales_invoices', 'supplier_bills', 'manual_journals']))
+<div class="col-md-6"><label class="form-label">Posting Mode</label><select name="posting_mode" class="form-select"><option value="draft">Import as Draft (recommended)</option><option value="post">Import and Post using existing accounting controls</option></select></div>
+@endif
+</div><button class="btn btn-primary mt-3">Validate and Preview</button></form></div>
+@endif
+
+@if($batch->total_rows)
+<div class="row g-2 mb-3">@foreach(['Total' => $batch->total_rows, 'Valid' => $batch->valid_rows, 'Warnings' => $batch->warning_rows, 'Errors' => $batch->invalid_rows, 'Duplicates' => $batch->duplicate_rows, 'Imported' => $batch->imported_rows, 'Failed' => $batch->failed_rows] as $label => $count)<div class="col"><div class="card card-body text-center"><strong>{{ $count }}</strong><small>{{ $label }}</small></div></div>@endforeach</div>
+<div class="card"><div class="card-header d-flex flex-wrap gap-2 align-items-center"><span class="me-2">Preview filter:</span>@foreach(['all' => 'All rows', 'warning' => 'Warnings', 'error' => 'Errors', 'duplicate' => 'Duplicates'] as $filter => $label)<button type="button" class="btn btn-sm {{ $filter === 'all' ? 'btn-primary' : 'btn-outline-primary' }} import-row-filter" data-filter="{{ $filter }}">{{ $label }}</button>@endforeach</div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Row</th><th>Status</th><th>Duplicate</th><th>Mapped Values</th><th>Warnings / Errors</th><th>Result</th></tr></thead><tbody>
+@foreach($batch->rows->take(config('imports.preview_rows')) as $row)
+<tr class="import-preview-row" data-warning="{{ $row->warnings ? '1' : '0' }}" data-error="{{ $row->errors ? '1' : '0' }}" data-duplicate="{{ $row->duplicate_status !== 'not_duplicate' ? '1' : '0' }}"><td>{{ $row->source_row_number }}</td><td>{{ $row->validation_status }}</td><td>{{ str($row->duplicate_status)->replace('_', ' ')->title() }}</td><td><small>{{ json_encode($row->mapped_values ?: $row->raw_values) }}</small></td><td class="text-danger">{{ implode('; ', [...$row->warnings, ...$row->errors]) }}</td><td>{{ $row->result_model ? class_basename($row->result_model).' #'.$row->result_id : '' }}</td></tr>
+@endforeach
+</tbody></table></div></div>
+@endif
+
+@if($batch->data_type === 'opening_balances' && $batch->status === 'ready')
+<div class="alert alert-info mt-3">Balanced Opening Balance staging is ready. Ledger posting is intentionally deferred to a later controlled workflow.</div>
+@endif
+
+<div class="d-flex flex-wrap gap-2 mt-3">
+@if($batch->status === 'ready' && $batch->data_type !== 'opening_balances')
+<form method="post" action="{{ route('import-export.batches.confirm', [$company->country->code, $company, $batch]) }}" onsubmit="return confirm('Confirm this import? Valid non-duplicate rows will create production records.')">@csrf<button class="btn btn-success">Confirm Import</button></form>
+@endif
+@if(in_array($batch->status, ['uploaded', 'mapping', 'validated', 'ready']))
+<form method="post" action="{{ route('import-export.batches.cancel', [$company->country->code, $company, $batch]) }}">@csrf<button class="btn btn-outline-danger">Cancel Import</button></form>
+@endif
+@if($batch->invalid_rows || $batch->failed_rows)
+<a class="btn btn-outline-secondary" href="{{ route('import-export.batches.errors', [$company->country->code, $company, $batch]) }}">Download Errors CSV</a>
+@endif
+</div>
+
+@if(in_array($batch->status, ['completed', 'completed_with_errors', 'failed', 'cancelled']))
+<div class="card card-body mt-4"><h2 class="h5">Import Result</h2><p>Imported: {{ $batch->imported_rows }} · Skipped/Duplicates: {{ $batch->duplicate_rows }} · Warnings: {{ $batch->warning_rows }} · Failed: {{ $batch->failed_rows + $batch->invalid_rows }}</p><div class="d-flex flex-wrap gap-2"><a class="btn btn-primary" href="{{ route('import-export.imports.create', [$company->country->code, $company]) }}">Import Another File</a><a class="btn btn-outline-secondary" href="{{ route('import-export.workspace', [$company->country->code, $company]) }}">Return to Import & Export</a></div></div>
+@endif
+
+@if(in_array($batch->status, ['validated', 'ready']))
+<div class="card card-body mt-3"><form method="post" action="{{ route('import-export.profiles.store', [$company->country->code, $company]) }}">@csrf<input type="hidden" name="data_type" value="{{ $batch->data_type }}">@foreach($batch->source_headers as $i => $header)<input type="hidden" name="source_headers[{{ $i }}]" value="{{ $header }}">@endforeach @foreach($batch->mapping as $source => $target)<input type="hidden" name="mapping[{{ $source }}]" value="{{ $target }}">@endforeach<label class="form-label">Save this mapping as an entity-scoped Import Profile</label><div class="input-group"><input class="form-control" name="name" required placeholder="Profile name"><button class="btn btn-outline-primary">Save Profile</button></div></form></div>
+@endif
+
 <script>
 document.getElementById('compatible-profile')?.addEventListener('change', function () {
     if (!this.value) return;

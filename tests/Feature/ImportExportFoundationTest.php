@@ -169,16 +169,78 @@ class ImportExportFoundationTest extends TestCase
         $sole = $this->entity('sole_trader', 'Sole Trader');
         $individual = $this->entity('individual', 'Individual');
         $this->actingAs($this->user)->get(route('import-export'))->assertOk()->assertSee('Import &amp; Export', false)->assertDontSee('@yield');
-        $this->get(route('import-export.country', 'NZ'))->assertOk()->assertSee($this->company->name)->assertSee($sole->name)->assertSee($individual->name);
+        $this->get(route('import-export.country', 'NZ'))->assertOk()->assertSee($this->company->name)->assertSee($sole->name)->assertSee($individual->name)->assertSee('Open Import & Export', false);
         foreach ([$this->company, $sole, $individual] as $entity) {
-            $this->get(route('import-export.workspace', ['NZ', $entity]))->assertOk()->assertSee('Import &amp; Export Workspace', false);
-            $this->get(route('import-export.imports.create', ['NZ', $entity]))->assertOk()->assertSee('New Import');
+            $this->get(route('import-export.workspace', ['NZ', $entity]))->assertOk()->assertSee($entity->entity_label.' – Import & Export', false)->assertSee('Start New Import')->assertSee('View Import History')->assertSee('View Import Profiles')->assertSee('New Export')->assertSee('Bank Statement Evidence')->assertSee('Customer Receipts and Supplier Payments are not direct import types.');
+            $importPage = $this->get(route('import-export.imports.create', ['NZ', $entity]))->assertOk()->assertSee('New Import')->assertSee('Upload / Continue')->assertSee('CSV / XLSX');
             $this->get(route('import-export.exports.create', ['NZ', $entity]))->assertOk()->assertSee('New Export');
+            if ($entity->entity_type === 'individual') {
+                $importPage->assertSee('Not applicable for Individual')->assertDontSee('name="branch_id"', false);
+            } else {
+                $importPage->assertSee('name="branch_id"', false);
+            }
         }
         $this->get(route('import-export.workspace', ['IN', $this->company]))->assertNotFound();
         $batch = $this->batch('customers', "Code,Name\nI1,Isolated\n", ['Code' => 'code', 'Name' => 'name']);
         $this->get(route('import-export.batches.show', ['NZ', $individual, $batch]))->assertNotFound();
         $this->assertThrows(fn () => app(ImportService::class)->upload($individual, 'customers', UploadedFile::fake()->createWithContent('branch.csv', "Code,Name\nI1,Person\n"), $this->company->branches()->value('id'), $this->user));
+    }
+
+    public function test_authorized_user_can_navigate_complete_browser_import_workflow(): void
+    {
+        $this->actingAs($this->user)
+            ->get(route('import-export.country', 'NZ'))
+            ->assertSee(route('import-export.workspace', ['NZ', $this->company]), false);
+
+        $this->get(route('import-export.workspace', ['NZ', $this->company]))
+            ->assertOk()
+            ->assertSee(route('import-export.imports.create', ['NZ', $this->company]), false)
+            ->assertSee(route('import-export.profiles.create', ['NZ', $this->company]), false)
+            ->assertSee(route('import-export.exports.create', ['NZ', $this->company]), false);
+
+        $this->get(route('import-export.imports.create', ['NZ', $this->company], false))
+            ->assertOk()
+            ->assertSee('Chart of Accounts')
+            ->assertSee('Opening Balances (staging only)')
+            ->assertDontSee('Customer Receipts</option>', false)
+            ->assertDontSee('Supplier Payments</option>', false);
+
+        $upload = $this->post(route('import-export.imports.upload', ['NZ', $this->company]), [
+            'data_type' => 'customers',
+            'file' => UploadedFile::fake()->createWithContent('browser-customers.csv', "Customer Code,Customer Name\nWEB001,Browser Customer\n"),
+        ]);
+        $batch = $this->company->importBatches()->latest('id')->firstOrFail();
+        $upload->assertRedirect(route('import-export.batches.show', ['NZ', $this->company, $batch]));
+
+        $this->get(route('import-export.batches.show', ['NZ', $this->company, $batch]))
+            ->assertOk()
+            ->assertSee('Column Mapping and Options')
+            ->assertSee('Source Column')
+            ->assertSee('Customer Code')
+            ->assertSee('Validate and Preview');
+
+        $this->post(route('import-export.batches.validate', ['NZ', $this->company, $batch]), [
+            'mapping' => ['Customer Code' => 'code', 'Customer Name' => 'name'],
+            'posting_mode' => 'draft',
+        ])->assertRedirect();
+
+        $this->get(route('import-export.batches.show', ['NZ', $this->company, $batch->fresh()]))
+            ->assertOk()
+            ->assertSee('Preview filter:')
+            ->assertSee('Valid')
+            ->assertSee('Warnings')
+            ->assertSee('Errors')
+            ->assertSee('Duplicates')
+            ->assertSee('data-duplicate="0"', false)
+            ->assertSee('Confirm Import');
+
+        $this->post(route('import-export.batches.confirm', ['NZ', $this->company, $batch]))->assertRedirect();
+        $this->get(route('import-export.batches.show', ['NZ', $this->company, $batch->fresh()]))
+            ->assertOk()
+            ->assertSee('Import Result')
+            ->assertSee('Import Another File')
+            ->assertSee('Return to Import & Export', false);
+        $this->assertDatabaseHas('customers', ['company_id' => $this->company->id, 'code' => 'WEB001']);
     }
 
     public function test_balanced_journal_import_financial_exports_and_opening_balance_staging_obey_ledger_controls(): void
