@@ -20,7 +20,12 @@ class ImportExportController extends Controller
 {
     public function index(Request $request, CountryJurisdictionService $jurisdictions)
     {
-        return view('import-export.index', ['countries' => $jurisdictions->countriesFor($request->user())]);
+        $mode = $request->validate(['mode' => ['nullable', Rule::in(['new', 'existing'])]])['mode'] ?? null;
+
+        return view('import-export.index', [
+            'countries' => $jurisdictions->countriesFor($request->user()),
+            'mode' => $mode,
+        ]);
     }
 
     public function country(Request $request, string $country, CountryJurisdictionService $jurisdictions)
@@ -40,7 +45,7 @@ class ImportExportController extends Controller
     public function entityImportUpload(Request $request, string $country, CountryJurisdictionService $jurisdictions, EntityImportService $service)
     {
         $country = $jurisdictions->country($country);
-        $data = $request->validate(['file' => ['required', 'file', 'max:'.config('imports.max_file_kb'), 'mimes:csv,xlsx']]);
+        $data = $request->validate(['file' => ['required', 'file', 'max:'.config('imports.max_file_kb'), 'extensions:csv,xlsx']]);
         $batch = $service->upload($country, $data['file'], $request->user());
 
         return redirect()->route('import-export.entity-imports.show', [$country->code, $batch]);

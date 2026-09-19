@@ -10,6 +10,7 @@ use App\ImportExport\ImportService;
 use App\Models\Company;
 use App\Models\Country;
 use App\Models\Currency;
+use App\Models\EntityImportBatch;
 use App\Models\ImportBatch;
 use App\Models\User;
 use App\Services\CompanyCreator;
@@ -22,6 +23,8 @@ use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\TestCase;
 
 class ImportExportFoundationTest extends TestCase
@@ -267,6 +270,128 @@ class ImportExportFoundationTest extends TestCase
         }
 
         $this->assertDatabaseHas('audit_logs', ['event' => 'accounting_entity.imported']);
+    }
+
+    public function test_import_export_navigation_and_exact_generated_entity_csv_complete_the_real_http_workflow(): void
+    {
+        $newMode = route('import-export', ['mode' => 'new']);
+        $existingMode = route('import-export', ['mode' => 'existing']);
+
+        $this->actingAs($this->user)->get(route('import-export'))
+            ->assertOk()
+            ->assertSee('href="'.$newMode.'"', false)
+            ->assertSee('href="'.$existingMode.'"', false);
+
+        $this->get($newMode)
+            ->assertOk()
+            ->assertSee('Choose Jurisdiction for New Entity')
+            ->assertSee('href="'.route('import-export.entity-imports.create', 'NZ').'"', false);
+        $this->get(route('import-export.entity-imports.create', 'NZ'))
+            ->assertOk()
+            ->assertSee('Selected jurisdiction:')
+            ->assertSee('Upload / Continue');
+
+        $this->get($existingMode)
+            ->assertOk()
+            ->assertSee('Choose Jurisdiction for Existing Entity')
+            ->assertSee('href="'.route('import-export.country', 'NZ').'"', false);
+
+        $this->get(route('import-export.country', 'NZ'))
+            ->assertOk()
+            ->assertSee('href="'.route('import-export.workspace', ['NZ', $this->company]).'"', false);
+        $this->get(route('import-export.workspace', ['NZ', $this->company]))
+            ->assertOk()
+            ->assertSee('href="'.route('import-export.imports.create', ['NZ', $this->company]).'"', false)
+            ->assertSee('href="'.route('import-export.exports.create', ['NZ', $this->company]).'"', false);
+        $this->get(route('import-export.imports.create', ['NZ', $this->company]))
+            ->assertOk()
+            ->assertSee('Upload / Continue');
+        $this->get(route('import-export.exports.create', ['NZ', $this->company]))
+            ->assertOk()
+            ->assertSee('Generate Download');
+
+        $samplePath = base_path('tests/SampleBusinessData/AruaDemoTrading/00_accounting_entity_import.csv');
+        $parsed = app(FileParser::class)->parse($samplePath, 'csv');
+        $this->assertCount(1, $parsed['rows']);
+        $this->assertSame('Arua Demo Trading Ltd', $parsed['rows'][0]['values']['Entity Name']);
+        $this->assertSame('Company', $parsed['rows'][0]['values']['Entity Type']);
+        $this->assertSame('NZ', $parsed['rows'][0]['values']['Country / Jurisdiction']);
+        $this->assertSame('NZD', $parsed['rows'][0]['values']['Base Currency']);
+
+        $upload = $this->post(route('import-export.entity-imports.upload', 'NZ'), [
+            'file' => new UploadedFile($samplePath, '00_accounting_entity_import.csv', 'text/csv', null, true),
+        ]);
+        $upload->assertSessionHasNoErrors();
+        $batch = EntityImportBatch::latest('id')->firstOrFail();
+        $upload->assertRedirect(route('import-export.entity-imports.show', ['NZ', $batch]));
+        $this->assertSame('entity_name', $batch->mapping['Entity Name']);
+        $this->assertSame('country', $batch->mapping['Country / Jurisdiction']);
+
+        $this->post(route('import-export.entity-imports.validate', ['NZ', $batch]), ['mapping' => $batch->mapping])
+            ->assertRedirect();
+        $batch->refresh();
+        $this->assertSame('ready', $batch->status);
+        $this->get(route('import-export.entity-imports.show', ['NZ', $batch]))
+            ->assertOk()
+            ->assertSee('Arua Demo Trading Ltd')
+            ->assertSee('Company')
+            ->assertSee('New Zealand')
+            ->assertSee('NZD')
+            ->assertSee('Confirm and Create Accounting Entity');
+
+        $this->post(route('import-export.entity-imports.confirm', ['NZ', $batch]))->assertRedirect();
+        $batch->refresh();
+        $entity = $batch->resultCompany()->firstOrFail();
+        $this->assertSame(1, $this->user->companies()->where('name', 'Arua Demo Trading Ltd')->count());
+        $this->get(route('companies.show', $entity))->assertOk()->assertSee('Arua Demo Trading Ltd');
+        $this->get(route('import-export.country', 'NZ'))->assertOk()->assertSee('Arua Demo Trading Ltd');
+        $this->get(route('import-export.workspace', ['NZ', $entity]))
+            ->assertOk()
+            ->assertSee('Arua Demo Trading Ltd')
+            ->assertSee('Start New Import')
+            ->assertSee('New Export');
+    }
+
+    public function test_entity_xlsx_ignores_blank_trailing_rows_and_rejects_two_populated_entities(): void
+    {
+        $country = Country::where('code', 'NZ')->firstOrFail();
+        $service = app(EntityImportService::class);
+        $headers = ['Entity Name', 'Entity Type', 'Country / Jurisdiction', 'Base Currency', 'Timezone', 'Financial Year Start', 'Financial Year End'];
+        $validPath = storage_path('framework/testing/entity-one-row.xlsx');
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->fromArray($headers, null, 'A1');
+        $sheet->fromArray(['XLSX Entity', 'Company', 'NZ', 'NZD', 'Pacific/Auckland', '2025-04-01', '2026-03-31'], null, 'A2');
+        $sheet->getStyle('A6:G6')->getFont()->setBold(true);
+        (new Xlsx($spreadsheet))->save($validPath);
+        $spreadsheet->disconnectWorksheets();
+
+        $batch = $service->upload($country, new UploadedFile($validPath, 'entity-one-row.xlsx', null, null, true), $this->user);
+        $this->assertSame('mapping', $batch->status);
+        $this->assertSame('XLSX Entity', $batch->raw_values['Entity Name']);
+        $this->assertSame('ready', $service->validate($batch, $batch->mapping, $this->user)->status);
+
+        $invalidPath = storage_path('framework/testing/entity-two-rows.xlsx');
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->fromArray($headers, null, 'A1');
+        $sheet->fromArray(['Company A', 'Company', 'NZ', 'NZD', 'Pacific/Auckland', '2025-04-01', '2026-03-31'], null, 'A2');
+        $sheet->fromArray(['Company B', 'Company', 'NZ', 'NZD', 'Pacific/Auckland', '2025-04-01', '2026-03-31'], null, 'A3');
+        (new Xlsx($spreadsheet))->save($invalidPath);
+        $spreadsheet->disconnectWorksheets();
+
+        try {
+            $service->upload($country, new UploadedFile($invalidPath, 'entity-two-rows.xlsx', null, null, true), $this->user);
+            $this->fail('Two populated Accounting Entities must be rejected.');
+        } catch (ValidationException $exception) {
+            $this->assertSame(
+                'This file contains 2 Accounting Entities. v0.8 supports one Accounting Entity per import. Please upload a file containing one entity.',
+                $exception->errors()['file'][0]
+            );
+        } finally {
+            @unlink($validPath);
+            @unlink($invalidPath);
+        }
     }
 
     public function test_entity_import_rejects_jurisdiction_type_duplicates_and_foreign_batches_and_exports_setup(): void

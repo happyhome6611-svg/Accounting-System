@@ -151,10 +151,19 @@ final class EntityImportService
     private function inspect(EntityImportBatch $batch, ?string $worksheet): EntityImportBatch
     {
         $parsed = $this->parser->parse(Storage::disk('local')->path($batch->stored_path), $batch->file_format, $worksheet);
-        if (count($parsed['rows']) !== 1) {
-            throw ValidationException::withMessages(['file' => 'v0.8 Accounting Entity import accepts exactly one entity per file.']);
+        $mapping = $this->mapper->suggestions($parsed['headers'], $this->fields());
+        $mappedHeaders = array_keys(array_filter($mapping));
+        $meaningfulRows = array_values(array_filter($parsed['rows'], fn (array $row) => collect($mappedHeaders)->contains(
+            fn (string $header) => filled($row['values'][$header] ?? null)
+        )));
+        $entityCount = count($meaningfulRows);
+        if ($entityCount !== 1) {
+            $message = $entityCount === 0
+                ? 'This file contains no Accounting Entity data. Please upload a file containing one entity.'
+                : "This file contains {$entityCount} Accounting Entities. v0.8 supports one Accounting Entity per import. Please upload a file containing one entity.";
+            throw ValidationException::withMessages(['file' => $message]);
         }
-        $batch->update(['worksheet' => $worksheet, 'status' => 'mapping', 'source_headers' => $parsed['headers'], 'raw_values' => $parsed['rows'][0]['values'], 'mapping' => $this->mapper->suggestions($parsed['headers'], $this->fields()), 'warnings' => [], 'errors' => []]);
+        $batch->update(['worksheet' => $worksheet, 'status' => 'mapping', 'source_headers' => $parsed['headers'], 'raw_values' => $meaningfulRows[0]['values'], 'mapping' => $mapping, 'warnings' => [], 'errors' => []]);
 
         return $batch->fresh(['country']);
     }
