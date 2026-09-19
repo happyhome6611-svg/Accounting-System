@@ -34,7 +34,8 @@ final class ProductImportAdapter extends AbstractAdapter
         }
         foreach (['default_sales_tax_code', 'default_purchase_tax_code'] as $field) {
             if (($values[$field] ?? '') && ! $company->taxCodes()->where('code', $values[$field])->where('is_active', true)->exists()) {
-                $errors[] = $this->fields()[$field]['label'].' is not valid for this entity.';
+                $direction = $field === 'default_sales_tax_code' ? 'Sales' : 'Purchase';
+                $errors[] = "{$direction} Tax Code {$values[$field]} is not configured for this entity. Configure it under Tax before importing this product.";
             }
         }
 

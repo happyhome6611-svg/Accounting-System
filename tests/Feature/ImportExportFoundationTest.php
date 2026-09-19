@@ -13,6 +13,7 @@ use App\Models\Currency;
 use App\Models\EntityImportBatch;
 use App\Models\ImportBatch;
 use App\Models\User;
+use App\Services\BranchService;
 use App\Services\CompanyCreator;
 use App\Services\EntityImportService;
 use App\Services\JournalService;
@@ -452,6 +453,87 @@ class ImportExportFoundationTest extends TestCase
         }
     }
 
+    public function test_exact_sample_imports_validate_after_documented_branch_account_and_tax_prerequisites(): void
+    {
+        $company = app(CompanyCreator::class)->create([
+            'entity_type' => 'company',
+            'name' => 'Sample Prerequisite Company',
+            'legal_name' => 'Sample Prerequisite Company',
+            'country_id' => Country::where('code', 'NZ')->value('id'),
+            'base_currency_id' => Currency::where('code', 'NZD')->value('id'),
+            'timezone' => 'Pacific/Auckland',
+            'financial_year_start' => '2025-04-01',
+            'financial_year_end' => '2026-03-31',
+        ], $this->user);
+
+        $accounts = $this->sampleBatch($company, 'chart_of_accounts', '03_chart_of_accounts.csv', true);
+        $this->assertSame('completed', $accounts->status);
+        $this->assertSame('Input Tax Recoverable', $company->accounts()->where('code', '1200')->value('name'));
+        $this->assertSame('Output Tax Payable', $company->accounts()->where('code', '2100')->value('name'));
+
+        $branches = app(BranchService::class);
+        foreach ([['code' => 'AKL', 'name' => 'Auckland'], ['code' => 'WLG', 'name' => 'Wellington']] as $branch) {
+            $branches->create($company, $branch + ['timezone' => 'Pacific/Auckland', 'is_active' => true, 'is_main_branch' => false], $this->user);
+        }
+
+        $beforeTax = $this->sampleBatch($company, 'products', '06_products_services.csv');
+        $this->assertSame('validated', $beforeTax->status);
+        $this->assertSame(40, $beforeTax->total_rows);
+        $this->assertSame(40, $beforeTax->invalid_rows);
+        $this->assertStringContainsString(
+            'Configure it under Tax before importing this product.',
+            implode(' ', $beforeTax->rows()->firstOrFail()->errors),
+        );
+        $this->actingAs($this->user)->get(route('import-export.workspace', ['NZ', $company]))
+            ->assertOk()
+            ->assertSee('Validation Failed')
+            ->assertSee('40');
+
+        $tax = app(TaxConfigurationService::class);
+        $registration = $tax->registration($company, [
+            'tax_type' => 'GST', 'name' => 'Generic GST', 'registration_number' => 'DEMO-NZ-001',
+            'registration_name' => 'Arua Demo Trading Ltd', 'effective_from' => '2025-04-01',
+            'effective_to' => '2026-03-31', 'filing_frequency' => 'two_monthly',
+            'accounting_basis' => 'accrual', 'status' => 'active',
+        ], $this->user);
+        $standard = $tax->code($company, [
+            'tax_registration_id' => $registration->id, 'tax_type' => 'GST', 'code' => 'STANDARD',
+            'name' => 'Standard', 'treatment' => 'taxable', 'recoverability_type' => 'full',
+            'effective_from' => '2025-04-01', 'effective_to' => '2026-03-31', 'is_active' => true,
+        ], $this->user);
+        $tax->code($company, [
+            'tax_registration_id' => $registration->id, 'tax_type' => 'GST', 'code' => 'ZERO',
+            'name' => 'Zero-rated', 'treatment' => 'zero_rated', 'recoverability_type' => 'full',
+            'effective_from' => '2025-04-01', 'effective_to' => '2026-03-31', 'is_active' => true,
+        ], $this->user);
+        $tax->rate($company, $standard, ['rate' => '15.00', 'effective_from' => '2025-04-01', 'effective_to' => '2026-03-31', 'is_active' => true], $this->user);
+        $tax->settings($company, [
+            'output_tax_account_id' => $company->accounts()->where('code', '2100')->value('id'),
+            'input_tax_account_id' => $company->accounts()->where('code', '1200')->value('id'),
+            'rounding_method' => 'per_line',
+        ], $this->user);
+        $tax->generatePeriods($company, $registration, $this->user);
+
+        $this->sampleBatch($company, 'customers', '04_customers.csv', true);
+        $this->sampleBatch($company, 'suppliers', '05_suppliers.csv', true);
+        $products = $this->sampleBatch($company, 'products', '06_products_services.csv', true);
+        $this->assertSame(40, $products->total_rows);
+        $this->assertSame(40, $products->valid_rows);
+        $this->assertSame(0, $products->invalid_rows);
+        $this->assertSame(40, $products->imported_rows);
+        $this->assertSame(40, $company->items()->count());
+
+        $sales = $this->sampleBatch($company, 'sales_invoices', '07_sales_invoices.csv');
+        $this->assertSame('ready', $sales->status);
+        $this->assertSame(900, $sales->total_rows);
+        $this->assertSame(0, $sales->invalid_rows);
+
+        $bills = $this->sampleBatch($company, 'supplier_bills', '09_supplier_bills.csv');
+        $this->assertSame('ready', $bills->status);
+        $this->assertSame(381, $bills->total_rows);
+        $this->assertSame(0, $bills->invalid_rows);
+    }
+
     public function test_entity_import_rejects_jurisdiction_type_duplicates_and_foreign_batches_and_exports_setup(): void
     {
         $service = app(EntityImportService::class);
@@ -573,6 +655,16 @@ class ImportExportFoundationTest extends TestCase
         $batch = $service->validate($this->company, $batch, $mapping, ['posting_mode' => $postingMode], $this->user);
 
         return $confirm ? $service->confirm($this->company, $batch, $this->user) : $batch;
+    }
+
+    private function sampleBatch(Company $company, string $type, string $filename, bool $confirm = false): ImportBatch
+    {
+        $path = base_path('tests/SampleBusinessData/AruaDemoTrading/'.$filename);
+        $file = new UploadedFile($path, $filename, 'text/csv', null, true);
+        $service = app(ImportService::class);
+        $batch = $service->upload($company, $type, $file, null, $this->user);
+
+        return $confirm ? $service->confirm($company, $batch, $this->user) : $batch;
     }
 
     private function entity(string $type, string $name): Company

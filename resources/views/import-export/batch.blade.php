@@ -2,7 +2,7 @@
 @section('title', 'Import Batch')
 @section('content')
 <nav aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="{{ route('import-export') }}">Import & Export</a></li><li class="breadcrumb-item"><a href="{{ route('import-export.country', $company->country->code) }}">{{ $company->country->name }}</a></li><li class="breadcrumb-item"><a href="{{ route('import-export.workspace', [$company->country->code, $company]) }}">{{ $company->entity_label }}</a></li><li class="breadcrumb-item active">Import Batch #{{ $batch->id }}</li></ol></nav>
-<div class="d-flex flex-wrap justify-content-between gap-3"><div><h1>Import Batch #{{ $batch->id }}</h1><p class="text-muted">{{ $company->country->name }} · {{ $company->entity_label }} · {{ str($company->entity_type)->replace('_', ' ')->title() }} · {{ $batch->original_filename }} · {{ str($batch->status)->replace('_', ' ')->title() }}</p></div><a class="btn btn-outline-secondary align-self-start" href="{{ route('import-export.workspace', [$company->country->code, $company]) }}">Back to Workspace</a></div>
+<div class="d-flex flex-wrap justify-content-between gap-3"><div><h1>Import Batch #{{ $batch->id }}</h1><p class="text-muted">{{ $company->country->name }} · {{ $company->entity_label }} · {{ str($company->entity_type)->replace('_', ' ')->title() }} · {{ $batch->original_filename }} · {{ $batch->statusLabel() }}</p></div><a class="btn btn-outline-secondary align-self-start" href="{{ route('import-export.workspace', [$company->country->code, $company]) }}">Back to Workspace</a></div>
 
 @if(session('success'))
 <div class="alert alert-success">{{ session('success') }}</div>

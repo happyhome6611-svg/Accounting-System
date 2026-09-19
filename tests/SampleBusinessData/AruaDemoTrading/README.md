@@ -2,54 +2,74 @@
 
 Realistic fictional sample business data for manual testing of Arua Accounting System v0.8.
 
-## Accounting Entity import
+## Before importing transactions
 
-Use `00_accounting_entity_import.csv` from **Import & Export → New Zealand → Import New Accounting Entity**. Validate the mapped fields and explicitly confirm creation. This creates the Company, its standard Head Office branch, financial year, accounting periods, ownership, and system accounts through Arua's normal Accounting Entity creation service.
+- [ ] Accounting Entity created with financial year 1 April 2025 to 31 March 2026
+- [ ] Chart of Accounts imported, including 1200 Input Tax Recoverable and 2100 Output Tax Payable
+- [ ] Active branches AKL and WLG created
+- [ ] Generic active Tax Registration `DEMO-NZ-001` configured
+- [ ] Output Tax control account set to 2100
+- [ ] Input Tax control account set to 1200
+- [ ] STANDARD taxable code and 15% effective rate configured
+- [ ] ZERO zero-rated code configured
+- [ ] Open Tax Periods generated before posting tax-bearing documents
+- [ ] Customers imported
+- [ ] Suppliers imported
+- [ ] Products / Services imported
 
-After creation, open **Import Data Into This Entity**. Create the additional `AKL` and `WLG` branches from `02_branches_reference.csv`, configure generic tax from `02_tax_setup_reference.csv`, and continue with the import order below. The entity import does not create transactions, additional branches, bank accounts, or tax configuration.
+## Required setup and import order
 
-## Manual setup alternative
-
-1. If not using the entity import file, manually create **Arua Demo Trading Ltd** as a Company in New Zealand with NZD, Pacific/Auckland, and financial year 1 April 2025 to 31 March 2026.
-2. The application creates branch `HO` and system accounts 1000, 1100, 2000, 3000, 4000, and 5000. Create active branches `AKL` (Auckland) and `WLG` (Wellington).
-3. Configure the generic v0.7 tax registration using `02_tax_setup_reference.csv`: STANDARD 15%, ZERO zero-rated, output account 2100, input account 1200. This is generic test configuration, not NZ GST-return logic.
-4. Create an active NZD bank account linked to ledger account 1010 before importing the bank statement.
-
-## Import order
-
-1. Import `03_chart_of_accounts.csv` as Chart of Accounts.
-2. Import `04_customers.csv` as Customers.
-3. Import `05_suppliers.csv` as Suppliers.
-4. Import `06_products_services.csv` as Products / Services.
-5. Import `07_sales_invoices.csv` as Sales Invoices. Use Draft first; review and post through Arua.
-6. Import `09_supplier_bills.csv` as Supplier Bills. Use Draft first; review and post through Arua.
-7. Enter `08_customer_receipts_reference.csv` through the existing Customer Receipt workflow; direct CSV receipt import is not available in v0.8.
-8. Enter `10_supplier_payments_reference.csv` through the existing Supplier Payment workflow; direct CSV payment import is not available in v0.8.
-9. Import `11_manual_journals.csv` as Manual Journals, review, then post.
-10. Import `12_bank_statement.csv` through Banking as evidence only. Match receipt/payment/journal rows; use the existing create-from-statement workflow for BANK rows. Do not create duplicate accounting.
-11. Import `13_opening_balances.csv` only to validate balanced staging. v0.8 intentionally does not post opening balances.
-12. Compare reports with `expected_control_totals.md` after completing the applicable manual workflows.
+1. Import `00_accounting_entity_import.csv` at **Import & Export → New Zealand → + Import New Accounting Entity**. This creates the Company, Head Office branch, financial year, accounting periods, ownership, and six system accounts.
+2. Review `01_company_setup_reference.csv`. It is reference-only. The entity import supplies all operational fields; its Legal Name is `Arua Demo Trading Ltd`, while the optional reference wording is `Arua Demo Trading Limited`. Change it at **Accounting Entities → Arua Demo Trading Ltd → Edit** only if that wording is wanted.
+3. Import `03_chart_of_accounts.csv` at **Import & Export → New Zealand → Arua Demo Trading Ltd → Manage Import & Export → New Import → Chart of Accounts**. This must happen before tax control accounts are selected.
+4. Create `AKL` and `WLG` from `02_branches_reference.csv` at **Accounting Entities → Arua Demo Trading Ltd → Manage Branches → Add Branch**. The CSV is reference-only and is not uploaded.
+5. Open **Tax → New Zealand → Arua Demo Trading Ltd → Configuration** and add this active registration:
+   - Name: `Generic GST`
+   - Registration Number: `DEMO-NZ-001`
+   - Registration Name: `Arua Demo Trading Ltd`
+   - Tax Type: `GST`
+   - Effective From: `2025-04-01`
+   - Effective To: `2026-03-31`
+   - Frequency: `Two Monthly`
+   - Accounting Basis: `Accrual`
+6. On the same Tax Configuration page, create these entity-scoped codes under that registration:
+   - `STANDARD`: Name `Standard`, treatment `Taxable`, full recoverability, effective from `2025-04-01`. Add a `15.00%` rate effective `2025-04-01` to `2026-03-31`.
+   - `ZERO`: Name `Zero-rated`, treatment `Zero Rated`, full recoverability, effective from `2025-04-01`. No rate row is required; v0.7 resolves non-taxable treatments at 0%.
+   - v0.7 has no separate Sales/Purchases applicability switches. Both active codes may be used by Sales and Purchases.
+7. Under **Tax → New Zealand → Arua Demo Trading Ltd → Configuration → Tax Settings**, select `2100 — Output Tax Payable` and `1200 — Input Tax Recoverable`, then save.
+8. Click **Generate Periods** for `DEMO-NZ-001`. Tax Periods are not required merely to validate a draft import, but an open period covering the transaction date is required before posting.
+9. Import `04_customers.csv` as Customers, then `05_suppliers.csv` as Suppliers.
+10. Import `06_products_services.csv` as Products / Services. Its `STANDARD` and `ZERO` defaults now resolve against the entity tax configuration.
+11. Import `07_sales_invoices.csv` as Sales Invoices in Draft mode. Review and post through Sales.
+12. Import `09_supplier_bills.csv` as Supplier Bills in Draft mode. Review and post through Purchases.
+13. Enter `08_customer_receipts_reference.csv` through **Sales → Customer Receipts** after the relevant invoices are posted. It is not directly importable.
+14. Enter `10_supplier_payments_reference.csv` through **Purchases → Supplier Payments** after the relevant bills are posted. It is not directly importable.
+15. Import `11_manual_journals.csv` as Manual Journals, review, then post.
+16. Create an active NZD bank account linked to account 1010, then import `12_bank_statement.csv` through **Banking → Bank Accounts → Import Statement** as evidence. Do not duplicate transactions already created elsewhere.
+17. Import `13_opening_balances.csv` only for balanced staging validation. v0.8 does not post opening-balance batches.
+18. Compare reports with `expected_control_totals.md` after completing the applicable workflows.
 
 ## File manifest
 
-| File | Rows | Directly importable | Importer/workflow | Purpose |
-| --- | ---: | --- | --- | --- |
-| 01_company_setup_reference.csv | 8 | No | Reference/manual workflow | Manual entity setup reference |
-| 02_branches_reference.csv | 2 | No | Reference/manual workflow | Manual branch setup reference |
-| 02_tax_setup_reference.csv | 12 | No | Reference/manual workflow | Generic v0.7 tax setup reference; not an NZ return configuration |
-| 03_chart_of_accounts.csv | 34 | Yes | chart_of_accounts | Adds 34 accounts to the six system accounts created with the entity |
-| 04_customers.csv | 50 | Yes | customers | Fifty fictional customers |
-| 05_suppliers.csv | 25 | Yes | suppliers | Twenty-five fictional suppliers |
-| 06_products_services.csv | 40 | Yes | products | Twenty-four products and sixteen services |
-| 07_sales_invoices.csv | 900 | Yes | sales_invoices | Three hundred sixty grouped sales invoices |
-| 07_sales_invoice_summary_reference.csv | 360 | No | Reference/manual workflow | Reference totals for validating imported grouped invoices |
-| 08_customer_receipts_reference.csv | 240 | No | Reference/manual workflow | REFERENCE DATA – CURRENTLY NOT DIRECTLY IMPORTABLE; enter through Sales receipts workflow |
-| 09_supplier_bills.csv | 381 | Yes | supplier_bills | One hundred ninety grouped supplier bills |
-| 09_supplier_bill_summary_reference.csv | 190 | No | Reference/manual workflow | Reference totals for validating imported grouped bills |
-| 10_supplier_payments_reference.csv | 140 | No | Reference/manual workflow | REFERENCE DATA – CURRENTLY NOT DIRECTLY IMPORTABLE; enter through Purchases payments workflow |
-| 11_manual_journals.csv | 80 | Yes | manual_journals | Forty balanced adjusting journals |
-| 12_bank_statement.csv | 542 | Yes | existing v0.5 bank statement importer | Evidence-only statement; import creates no journals |
-| 13_opening_balances.csv | 9 | Yes | opening_balances | Balanced staging only; v0.8 cannot post this batch |
+| File | Purpose | Direct import? | Where to use it |
+| --- | --- | --- | --- |
+| 00_accounting_entity_import.csv | Create the Accounting Entity | Yes | Import & Export → New Zealand → + Import New Accounting Entity |
+| 01_company_setup_reference.csv | Entity/profile reference; optional Legal Name wording | No | Accounting Entities → Arua Demo Trading Ltd → Edit |
+| 02_branches_reference.csv | Values for AKL and WLG branches | No | Accounting Entities → Arua Demo Trading Ltd → Manage Branches → Add Branch |
+| 02_tax_setup_reference.csv | Generic v0.7 registration, codes, rate, and control-account values | No | Tax → New Zealand → Arua Demo Trading Ltd → Configuration |
+| 03_chart_of_accounts.csv | Add 34 accounts, including tax control accounts | Yes | Entity Import & Export → New Import → Chart of Accounts |
+| 04_customers.csv | Create 50 customers | Yes | Entity Import & Export → New Import → Customers |
+| 05_suppliers.csv | Create 25 suppliers | Yes | Entity Import & Export → New Import → Suppliers |
+| 06_products_services.csv | Create 40 products/services after tax setup | Yes | Entity Import & Export → New Import → Products / Services |
+| 07_sales_invoices.csv | Create 360 grouped draft invoices | Yes | Entity Import & Export → New Import → Sales Invoices |
+| 07_sales_invoice_summary_reference.csv | Invoice control totals | No | Reference only after Sales Invoice import |
+| 08_customer_receipts_reference.csv | Values for 240 customer receipts | No | Sales → Customer Receipts |
+| 09_supplier_bills.csv | Create 190 grouped draft bills | Yes | Entity Import & Export → New Import → Supplier Bills |
+| 09_supplier_bill_summary_reference.csv | Supplier Bill control totals | No | Reference only after Supplier Bill import |
+| 10_supplier_payments_reference.csv | Values for 140 supplier payments | No | Purchases → Supplier Payments |
+| 11_manual_journals.csv | Create 40 balanced draft journals | Yes | Entity Import & Export → New Import → Manual Journals |
+| 12_bank_statement.csv | Import 542 statement-evidence rows | Yes | Banking → Bank Accounts → Import Statement |
+| 13_opening_balances.csv | Balanced staging validation only | Yes | Entity Import & Export → New Import → Opening Balances |
 
 ## File prerequisites and expected results
 

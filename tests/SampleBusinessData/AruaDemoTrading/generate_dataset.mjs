@@ -416,7 +416,7 @@ const usageRows = [
   ["12_bank_statement.csv", "NZD bank account linked to account 1010 exists", "Import 542 evidence rows; match existing entries and create only the 150 BANK entries", "Direct evidence import"],
   ["13_opening_balances.csv", "Accounts and FY exist", "Validate one NZD 97,000 debit/credit batch without posting it", "Direct staging only"],
 ];
-const readme = [
+const legacyGeneratedReadme = [
   "# Arua Demo Trading Ltd", "", "Realistic fictional sample business data for manual testing of Arua Accounting System v0.8.", "",
   "## Accounting Entity import", "", "Use `00_accounting_entity_import.csv` from **Import & Export → New Zealand → Import New Accounting Entity**. Validate the mapped fields and explicitly confirm creation. This creates the Company, its standard Head Office branch, financial year, accounting periods, ownership, and system accounts through Arua's normal Accounting Entity creation service.", "", "After creation, open **Import Data Into This Entity**. Create the additional `AKL` and `WLG` branches from `02_branches_reference.csv`, configure generic tax from `02_tax_setup_reference.csv`, and continue with the import order below. The entity import does not create transactions, additional branches, bank accounts, or tax configuration.", "",
   "## Manual setup", "", "1. Create **Arua Demo Trading Ltd** as a Company in New Zealand with NZD, Pacific/Auckland, and financial year 1 April 2025 to 31 March 2026.",
@@ -439,6 +439,10 @@ const readme = [
   `- Meaningful data rows, including reference summaries: ${totalMeaningfulRows}`, "",
   "All names, addresses, phone numbers, email addresses, references, and monetary activity are synthetic.",
 ].join("\n") + "\n";
+
+// The setup/import guide is maintained as reviewed user-facing documentation.
+// Preserve it when regenerating deterministic data files and control totals.
+const readme = await fs.readFile(new URL("README.md", outputDir), "utf8");
 
 files.set("README.md", { content: readme, rows: [], headers: [], meta: { importable: false } });
 files.set("expected_control_totals.md", { content: controlMarkdown, rows: [], headers: [], meta: { importable: false } });
