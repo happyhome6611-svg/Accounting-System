@@ -20,11 +20,8 @@ class ImportExportController extends Controller
 {
     public function index(Request $request, CountryJurisdictionService $jurisdictions)
     {
-        $mode = $request->validate(['mode' => ['nullable', Rule::in(['new', 'existing'])]])['mode'] ?? null;
-
         return view('import-export.index', [
             'countries' => $jurisdictions->countriesFor($request->user()),
-            'mode' => $mode,
         ]);
     }
 
@@ -65,7 +62,7 @@ class ImportExportController extends Controller
         $country = $jurisdictions->country($country);
         $service->authorize($batch, $request->user());
         abort_unless($batch->country_id === $country->id, 404);
-        $service->selectWorksheet($batch, $request->validate(['worksheet' => 'required|string'])['worksheet']);
+        $service->selectWorksheet($batch, $request->validate(['worksheet' => 'required|string'])['worksheet'], $request->user());
 
         return back()->with('success', 'Worksheet selected. Map the entity fields.');
     }

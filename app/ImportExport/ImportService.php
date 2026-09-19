@@ -65,13 +65,18 @@ final class ImportService
             throw ValidationException::withMessages(['worksheet' => 'Select a worksheet from the uploaded workbook.']);
         }
         $parsed = $this->parser->parse(Storage::disk(config('imports.disk'))->path($batch->stored_path), $batch->file_format, $worksheet);
-        DB::transaction(function () use ($batch, $worksheet, $parsed) {
+        $fields = $this->adapters->get($batch->data_type)->fields();
+        DB::transaction(function () use ($batch, $worksheet, $parsed, $fields) {
             $batch->rows()->delete();
             foreach ($parsed['rows'] as $row) {
                 $batch->rows()->create(['source_row_number' => $row['number'], 'raw_values' => $row['values'], 'row_fingerprint' => hash('sha256', json_encode($this->normalize($row['values']), JSON_UNESCAPED_UNICODE))]);
             }
-            $batch->update(['worksheet' => $worksheet, 'source_headers' => $parsed['headers'], 'mapping' => $this->mapper->suggestions($parsed['headers'], $this->adapters->get($batch->data_type)->fields()), 'status' => 'mapping', 'total_rows' => count($parsed['rows'])]);
+            $batch->update(['worksheet' => $worksheet, 'source_headers' => $parsed['headers'], 'mapping' => $this->mapper->suggestions($parsed['headers'], $fields), 'status' => 'mapping', 'total_rows' => count($parsed['rows'])]);
         });
+
+        if ($this->mapper->canAutoMap($parsed['headers'], $fields)) {
+            return $this->validate($company, $batch->fresh(), $this->mapper->exactSuggestions($parsed['headers'], $fields), ['posting_mode' => 'draft'], $user);
+        }
 
         return $batch->fresh('rows');
     }

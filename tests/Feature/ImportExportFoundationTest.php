@@ -173,7 +173,7 @@ class ImportExportFoundationTest extends TestCase
         $sole = $this->entity('sole_trader', 'Sole Trader');
         $individual = $this->entity('individual', 'Individual');
         $this->actingAs($this->user)->get(route('import-export'))->assertOk()->assertSee('Import &amp; Export', false)->assertDontSee('@yield');
-        $this->get(route('import-export.country', 'NZ'))->assertOk()->assertSee($this->company->name)->assertSee($sole->name)->assertSee($individual->name)->assertSee('Open Import & Export', false);
+        $this->get(route('import-export.country', 'NZ'))->assertOk()->assertSee($this->company->name)->assertSee($sole->name)->assertSee($individual->name)->assertSee('Manage Import & Export', false);
         foreach ([$this->company, $sole, $individual] as $entity) {
             $this->get(route('import-export.workspace', ['NZ', $entity]))->assertOk()->assertSee($entity->entity_label.' – Import & Export', false)->assertSee('Start New Import')->assertSee('View Import History')->assertSee('View Import Profiles')->assertSee('New Export')->assertSee('Bank Statement Evidence')->assertSee('Customer Receipts and Supplier Payments are not direct import types.');
             $importPage = $this->get(route('import-export.imports.create', ['NZ', $entity]))->assertOk()->assertSee('New Import')->assertSee('Upload / Continue')->assertSee('CSV / XLSX');
@@ -218,15 +218,10 @@ class ImportExportFoundationTest extends TestCase
 
         $this->get(route('import-export.batches.show', ['NZ', $this->company, $batch]))
             ->assertOk()
-            ->assertSee('Column Mapping and Options')
-            ->assertSee('Source Column')
-            ->assertSee('Customer Code')
-            ->assertSee('Validate and Preview');
-
-        $this->post(route('import-export.batches.validate', ['NZ', $this->company, $batch]), [
-            'mapping' => ['Customer Code' => 'code', 'Customer Name' => 'name'],
-            'posting_mode' => 'draft',
-        ])->assertRedirect();
+            ->assertDontSee('Column Mapping and Options')
+            ->assertSee('WEB001')
+            ->assertSee('Browser Customer')
+            ->assertSee('Change Mapping');
 
         $this->get(route('import-export.batches.show', ['NZ', $this->company, $batch->fresh()]))
             ->assertOk()
@@ -251,14 +246,12 @@ class ImportExportFoundationTest extends TestCase
     {
         $service = app(EntityImportService::class);
         $country = Country::where('code', 'NZ')->firstOrFail();
-        $this->actingAs($this->user)->get(route('import-export'))->assertSee('Import New Accounting Entity')->assertSee('Import Data Into Existing Entity');
+        $this->actingAs($this->user)->get(route('import-export'))->assertSee('Import New Accounting Entity')->assertSee('Import / Export Existing Entity Data')->assertDontSee('Choose Jurisdiction')->assertDontSee('Choose Existing Entity');
         $this->get(route('import-export.country', 'NZ'))->assertSee('+ Import New Accounting Entity')->assertSee('Existing Accounting Entities');
 
         foreach ([['Company', 'Arua Demo Trading Ltd', 1], ['Sole Trader', 'Imported Trader', 1], ['Individual', 'Imported Person', 0]] as [$type, $name, $branches]) {
             $csv = "Entity Name,Entity Type,Country,Base Currency,Timezone,Financial Year Start,Financial Year End\n{$name},{$type},NZ,NZD,Pacific/Auckland,2025-04-01,2026-03-31\n";
             $batch = $service->upload($country, UploadedFile::fake()->createWithContent(str($name)->slug().'.csv', $csv), $this->user);
-            $this->assertSame('mapping', $batch->status);
-            $batch = $service->validate($batch, $batch->mapping, $this->user);
             $this->assertSame('ready', $batch->status);
             $this->assertSame('not_duplicate', $batch->duplicate_status);
             $entity = $service->confirm($batch, $this->user);
@@ -274,27 +267,16 @@ class ImportExportFoundationTest extends TestCase
 
     public function test_import_export_navigation_and_exact_generated_entity_csv_complete_the_real_http_workflow(): void
     {
-        $newMode = route('import-export', ['mode' => 'new']);
-        $existingMode = route('import-export', ['mode' => 'existing']);
-
         $this->actingAs($this->user)->get(route('import-export'))
             ->assertOk()
-            ->assertSee('href="'.$newMode.'"', false)
-            ->assertSee('href="'.$existingMode.'"', false);
+            ->assertDontSee('Choose Jurisdiction')
+            ->assertDontSee('Choose Existing Entity')
+            ->assertSee('href="'.route('import-export.country', 'NZ').'"', false);
 
-        $this->get($newMode)
-            ->assertOk()
-            ->assertSee('Choose Jurisdiction for New Entity')
-            ->assertSee('href="'.route('import-export.entity-imports.create', 'NZ').'"', false);
         $this->get(route('import-export.entity-imports.create', 'NZ'))
             ->assertOk()
             ->assertSee('Selected jurisdiction:')
             ->assertSee('Upload / Continue');
-
-        $this->get($existingMode)
-            ->assertOk()
-            ->assertSee('Choose Jurisdiction for Existing Entity')
-            ->assertSee('href="'.route('import-export.country', 'NZ').'"', false);
 
         $this->get(route('import-export.country', 'NZ'))
             ->assertOk()
@@ -324,20 +306,18 @@ class ImportExportFoundationTest extends TestCase
         $upload->assertSessionHasNoErrors();
         $batch = EntityImportBatch::latest('id')->firstOrFail();
         $upload->assertRedirect(route('import-export.entity-imports.show', ['NZ', $batch]));
+        $this->assertSame('ready', $batch->status);
         $this->assertSame('entity_name', $batch->mapping['Entity Name']);
         $this->assertSame('country', $batch->mapping['Country / Jurisdiction']);
-
-        $this->post(route('import-export.entity-imports.validate', ['NZ', $batch]), ['mapping' => $batch->mapping])
-            ->assertRedirect();
-        $batch->refresh();
-        $this->assertSame('ready', $batch->status);
         $this->get(route('import-export.entity-imports.show', ['NZ', $batch]))
             ->assertOk()
+            ->assertDontSee('Column Mapping')
             ->assertSee('Arua Demo Trading Ltd')
             ->assertSee('Company')
             ->assertSee('New Zealand')
             ->assertSee('NZD')
-            ->assertSee('Confirm and Create Accounting Entity');
+            ->assertSee('Confirm Import')
+            ->assertSee('Change Mapping');
 
         $this->post(route('import-export.entity-imports.confirm', ['NZ', $batch]))->assertRedirect();
         $batch->refresh();
@@ -367,9 +347,8 @@ class ImportExportFoundationTest extends TestCase
         $spreadsheet->disconnectWorksheets();
 
         $batch = $service->upload($country, new UploadedFile($validPath, 'entity-one-row.xlsx', null, null, true), $this->user);
-        $this->assertSame('mapping', $batch->status);
+        $this->assertSame('ready', $batch->status);
         $this->assertSame('XLSX Entity', $batch->raw_values['Entity Name']);
-        $this->assertSame('ready', $service->validate($batch, $batch->mapping, $this->user)->status);
 
         $invalidPath = storage_path('framework/testing/entity-two-rows.xlsx');
         $spreadsheet = new Spreadsheet;
@@ -391,6 +370,85 @@ class ImportExportFoundationTest extends TestCase
         } finally {
             @unlink($validPath);
             @unlink($invalidPath);
+        }
+    }
+
+    public function test_exact_customer_headers_auto_preview_and_external_headers_require_mapping_with_samples(): void
+    {
+        $samplePath = base_path('tests/SampleBusinessData/AruaDemoTrading/04_customers.csv');
+        $upload = $this->actingAs($this->user)->post(route('import-export.imports.upload', ['NZ', $this->company]), [
+            'data_type' => 'customers',
+            'file' => new UploadedFile($samplePath, '04_customers.csv', 'text/csv', null, true),
+        ]);
+        $upload->assertSessionHasNoErrors();
+        $batch = $this->company->importBatches()->latest('id')->firstOrFail();
+        $upload->assertRedirect(route('import-export.batches.show', ['NZ', $this->company, $batch]));
+        $this->assertSame('ready', $batch->status);
+        $this->get(route('import-export.batches.show', ['NZ', $this->company, $batch]))
+            ->assertOk()
+            ->assertDontSee('Column Mapping and Options')
+            ->assertSee('CUST001')
+            ->assertSee('Kauri Design 001 Ltd')
+            ->assertSee('Confirm Import')
+            ->assertSee('Change Mapping');
+        $this->post(route('import-export.batches.confirm', ['NZ', $this->company, $batch]))->assertRedirect();
+        $this->assertDatabaseHas('customers', ['company_id' => $this->company->id, 'code' => 'CUST001', 'name' => 'Kauri Design 001 Ltd']);
+        $this->assertDatabaseMissing('customers', ['company_id' => $this->company->id, 'code' => 'Customer Code']);
+
+        $external = $this->post(route('import-export.imports.upload', ['NZ', $this->company]), [
+            'data_type' => 'customers',
+            'file' => UploadedFile::fake()->createWithContent('external-customers.csv', "CustCode,CustomerName,Telephone\nCUST999,Mapping Test Customer,0210000000\n"),
+        ]);
+        $externalBatch = $this->company->importBatches()->latest('id')->firstOrFail();
+        $external->assertRedirect(route('import-export.batches.show', ['NZ', $this->company, $externalBatch]));
+        $this->assertSame('mapping', $externalBatch->status);
+        $this->get(route('import-export.batches.show', ['NZ', $this->company, $externalBatch]))
+            ->assertOk()
+            ->assertSee('Source Column')
+            ->assertSee('Sample Value')
+            ->assertSee('Arua Field')
+            ->assertSee('CustCode')
+            ->assertSee('CUST999')
+            ->assertSee('CustomerName')
+            ->assertSee('Mapping Test Customer')
+            ->assertSee('Telephone')
+            ->assertSee('0210000000');
+        $this->post(route('import-export.batches.validate', ['NZ', $this->company, $externalBatch]), [
+            'mapping' => $externalBatch->mapping,
+            'posting_mode' => 'draft',
+        ])->assertRedirect();
+        $this->assertSame('ready', $externalBatch->fresh()->status);
+    }
+
+    public function test_parser_keeps_headers_separate_from_csv_and_xlsx_records_for_supported_imports(): void
+    {
+        $parser = app(FileParser::class);
+        foreach (['04_customers.csv', '05_suppliers.csv', '06_products_services.csv', '07_sales_invoices.csv', '09_supplier_bills.csv', '11_manual_journals.csv'] as $filename) {
+            $parsed = $parser->parse(base_path('tests/SampleBusinessData/AruaDemoTrading/'.$filename), 'csv');
+            $this->assertNotEmpty($parsed['headers']);
+            $this->assertNotEmpty($parsed['rows']);
+            $this->assertSame(2, $parsed['rows'][0]['number']);
+            foreach ($parsed['headers'] as $header) {
+                $this->assertArrayHasKey($header, $parsed['rows'][0]['values']);
+                $this->assertNotSame($header, $parsed['rows'][0]['values'][$header], $filename.' must not treat its header as production data.');
+            }
+        }
+
+        $path = storage_path('framework/testing/parser-contract.xlsx');
+        $spreadsheet = new Spreadsheet;
+        $spreadsheet->getActiveSheet()->fromArray([
+            ['Customer Code', 'Customer Name'],
+            ['XLSX001', 'XLSX Customer'],
+        ]);
+        (new Xlsx($spreadsheet))->save($path);
+        $spreadsheet->disconnectWorksheets();
+        try {
+            $parsed = $parser->parse($path, 'xlsx');
+            $this->assertSame(['Customer Code', 'Customer Name'], $parsed['headers']);
+            $this->assertSame(['Customer Code' => 'XLSX001', 'Customer Name' => 'XLSX Customer'], $parsed['rows'][0]['values']);
+            $this->assertSame(2, $parsed['rows'][0]['number']);
+        } finally {
+            @unlink($path);
         }
     }
 

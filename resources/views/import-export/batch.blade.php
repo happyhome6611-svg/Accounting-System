@@ -15,19 +15,20 @@
 <div class="card card-body"><h2 class="h5">Select Worksheet</h2><form method="post" action="{{ route('import-export.batches.worksheet', [$company->country->code, $company, $batch]) }}">@csrf<select class="form-select mb-3" name="worksheet" required><option value="">Choose worksheet</option>@foreach($batch->options['worksheets'] ?? [] as $sheet)<option>{{ $sheet }}</option>@endforeach</select><button class="btn btn-primary">Inspect Columns</button></form></div>
 @endif
 
-@if(in_array($batch->status, ['mapping', 'validated', 'ready']))
-<div class="card card-body mb-4"><h2 class="h5">Column Mapping and Options</h2><p class="text-muted">Source Column → Arua Field. Fields marked * are required; choose Ignore column for data that should not be imported.</p>
+@if(in_array($batch->status, ['mapping', 'validated']) || request()->boolean('change_mapping'))
+<div class="card card-body mb-4"><h2 class="h5">Column Mapping and Options</h2><p class="text-muted">Match each source column to an Arua field. Sample values confirm that the file data was read correctly.</p>
 @if($profiles->isNotEmpty())
 <div class="mb-3"><label class="form-label">Compatible Saved Profile</label><select id="compatible-profile" class="form-select"><option value="">Review current suggestions</option>@foreach($profiles as $profile)<option value="{{ base64_encode(json_encode($profile->mapping)) }}">{{ $profile->name }}</option>@endforeach</select></div>
 @endif
-<form method="post" action="{{ route('import-export.batches.validate', [$company->country->code, $company, $batch]) }}">@csrf<div class="row g-3">
+<form method="post" action="{{ route('import-export.batches.validate', [$company->country->code, $company, $batch]) }}">@csrf<div class="table-responsive"><table class="table align-middle"><thead><tr><th>Source Column</th><th>Sample Value</th><th>Arua Field</th></tr></thead><tbody>
 @foreach($batch->source_headers as $header)
-<div class="col-md-6"><label class="form-label">{{ $header }}</label><select class="form-select import-mapping" data-source="{{ $header }}" name="mapping[{{ $header }}]"><option value="">Ignore column</option>@foreach($fields as $key => $field)<option value="{{ $key }}" @selected(($batch->mapping[$header] ?? null) === $key)>{{ $field['label'] }}{{ $field['required'] ? ' *' : '' }}</option>@endforeach</select></div>
+<tr><td>{{ $header }}</td><td>{{ $batch->rows->first()?->raw_values[$header] ?? '—' }}</td><td><select class="form-select import-mapping" data-source="{{ $header }}" name="mapping[{{ $header }}]"><option value="">Ignore column</option>@foreach($fields as $key => $field)<option value="{{ $key }}" @selected(($batch->mapping[$header] ?? null) === $key)>{{ $field['label'] }}{{ $field['required'] ? ' *' : '' }}</option>@endforeach</select></td></tr>
 @endforeach
+</tbody></table></div>
 @if(in_array($batch->data_type, ['sales_invoices', 'supplier_bills', 'manual_journals']))
-<div class="col-md-6"><label class="form-label">Posting Mode</label><select name="posting_mode" class="form-select"><option value="draft">Import as Draft (recommended)</option><option value="post">Import and Post using existing accounting controls</option></select></div>
+<div class="mt-3"><label class="form-label">Posting Mode</label><select name="posting_mode" class="form-select"><option value="draft">Import as Draft (recommended)</option><option value="post">Import and Post using existing accounting controls</option></select></div>
 @endif
-</div><button class="btn btn-primary mt-3">Validate and Preview</button></form></div>
+<button class="btn btn-primary mt-3">Validate and Preview</button></form></div>
 @endif
 
 @if($batch->total_rows)
@@ -46,6 +47,7 @@
 <div class="d-flex flex-wrap gap-2 mt-3">
 @if($batch->status === 'ready' && $batch->data_type !== 'opening_balances')
 <form method="post" action="{{ route('import-export.batches.confirm', [$company->country->code, $company, $batch]) }}" onsubmit="return confirm('Confirm this import? Valid non-duplicate rows will create production records.')">@csrf<button class="btn btn-success">Confirm Import</button></form>
+<a class="btn btn-outline-primary" href="{{ route('import-export.batches.show', [$company->country->code, $company, $batch, 'change_mapping' => 1]) }}">Change Mapping</a>
 @endif
 @if(in_array($batch->status, ['uploaded', 'mapping', 'validated', 'ready']))
 <form method="post" action="{{ route('import-export.batches.cancel', [$company->country->code, $company, $batch]) }}">@csrf<button class="btn btn-outline-danger">Cancel Import</button></form>

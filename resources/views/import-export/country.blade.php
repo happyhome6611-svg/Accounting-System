@@ -13,7 +13,7 @@
                 <div class="card-body d-flex flex-column">
                     <h2 class="h5">{{ $company->entity_label }}</h2>
                     <p class="text-muted mb-4">{{ str($company->entity_type)->replace('_', ' ')->title() }} · {{ $country->name }}</p>
-                    <a class="btn btn-primary mt-auto stretched-link" href="{{ route('import-export.workspace', [$country->code, $company]) }}" aria-label="Open Import and Export for {{ $company->entity_label }}">Open Import & Export</a>
+                    <a class="btn btn-primary mt-auto stretched-link" href="{{ route('import-export.workspace', [$country->code, $company]) }}" aria-label="Manage Import and Export for {{ $company->entity_label }}">Manage Import & Export</a>
                 </div>
             </div>
         </div>

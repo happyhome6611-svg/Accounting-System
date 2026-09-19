@@ -48,12 +48,20 @@ final class EntityImportService
             return tap($batch)->update(['warnings' => ['Select one worksheet.'], 'mapped_values' => ['worksheets' => $worksheets]]);
         }
 
-        return $this->inspect($batch, $worksheets[0] === 'CSV' ? null : $worksheets[0]);
+        $batch = $this->inspect($batch, $worksheets[0] === 'CSV' ? null : $worksheets[0]);
+
+        return $this->mapper->canAutoMap($batch->source_headers, $this->fields())
+            ? $this->validate($batch, $this->mapper->exactSuggestions($batch->source_headers, $this->fields()), $user)
+            : $batch;
     }
 
-    public function selectWorksheet(EntityImportBatch $batch, string $worksheet): EntityImportBatch
+    public function selectWorksheet(EntityImportBatch $batch, string $worksheet, User $user): EntityImportBatch
     {
-        return $this->inspect($batch, $worksheet);
+        $batch = $this->inspect($batch, $worksheet);
+
+        return $this->mapper->canAutoMap($batch->source_headers, $this->fields())
+            ? $this->validate($batch, $this->mapper->exactSuggestions($batch->source_headers, $this->fields()), $user)
+            : $batch;
     }
 
     public function validate(EntityImportBatch $batch, array $mapping, User $user): EntityImportBatch
