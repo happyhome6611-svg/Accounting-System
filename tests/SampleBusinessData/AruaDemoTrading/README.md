@@ -2,6 +2,16 @@
 
 Realistic fictional sample business data for manual testing of Arua Accounting System v0.8.
 
+## Quick demo setup (local development/test only)
+
+1. Import `00_accounting_entity_import.csv` through **Import & Export → New Zealand → + Import New Accounting Entity**.
+2. Import `03_chart_of_accounts.csv` through the new entity's **Import & Export → New Import → Chart of Accounts**.
+3. Run `php artisan arua:setup-demo-trading --entity=<actual entity ID>`. The command configures the reference-only `02_branches_reference.csv` and `02_tax_setup_reference.csv` prerequisites on that existing entity; it never creates a new company. It is disabled in production.
+4. Import Customers, then Suppliers, then Products / Services.
+5. Continue with the draft transaction imports and manual workflows below.
+
+The command is repeatable and leaves existing matching setup intact. It stops if a prerequisite account is missing or existing setup conflicts with the reference values. `01_company_setup_reference.csv` remains a profile reference, not an import file.
+
 ## Before importing transactions
 
 - [ ] Accounting Entity created with financial year 1 April 2025 to 31 March 2026
