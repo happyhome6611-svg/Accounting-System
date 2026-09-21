@@ -2,6 +2,7 @@
 
 namespace App\ImportExport\Adapters;
 
+use App\ImportExport\SourceTaxComparator;
 use App\Models\Company;
 use App\Models\User;
 use App\Services\PurchaseService;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 
 final class SupplierBillImportAdapter extends AbstractAdapter
 {
-    public function __construct(private PurchaseService $purchases, private TaxCalculationService $tax) {}
+    public function __construct(private PurchaseService $purchases, private TaxCalculationService $tax, private SourceTaxComparator $sourceTax) {}
 
     public function type(): string
     {
@@ -48,8 +49,9 @@ final class SupplierBillImportAdapter extends AbstractAdapter
                 $amount = bcsub(bcmul((string) $values['quantity'], (string) $values['unit_price'], 4), (string) ($values['discount'] ?: 0), 4);
                 $codeId = $company->taxCodes()->where('code', $values['tax_code'])->value('id');
                 $result = $this->tax->calculate($company, $codeId, $values['bill_date'], $amount, $this->bool($values['tax_inclusive'] ?? null, false));
-                if (($values['source_tax'] ?? '') !== '' && (! is_numeric($values['source_tax']) || bccomp((string) $values['source_tax'], $result['tax'], 4) !== 0)) {
-                    $warnings[] = 'Source Tax Amount differs from Arua resolved tax '.$result['tax'].' and will not override it.';
+                $warning = $this->sourceTax->warning($values['source_tax'] ?? null, $result['tax'], $company->baseCurrency);
+                if ($warning) {
+                    $warnings[] = $warning;
                 }
             } catch (\Throwable $exception) {
                 $errors[] = $exception->getMessage();

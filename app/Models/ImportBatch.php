@@ -40,4 +40,25 @@ class ImportBatch extends Model
 
         return str($this->status)->replace('_', ' ')->title()->toString();
     }
+
+    public function documentField(): ?string
+    {
+        return match ($this->data_type) {
+            'sales_invoices' => 'invoice_ref',
+            'supplier_bills' => 'bill_ref',
+            default => null,
+        };
+    }
+
+    public function documentCount(): ?int
+    {
+        $field = $this->documentField();
+
+        return $field ? $this->rows()->pluck('mapped_values')->pluck($field)->filter()->unique()->count() : null;
+    }
+
+    public function importedDocumentCount(): ?int
+    {
+        return $this->documentField() ? $this->rows()->whereNotNull('result_id')->distinct()->count('result_id') : null;
+    }
 }

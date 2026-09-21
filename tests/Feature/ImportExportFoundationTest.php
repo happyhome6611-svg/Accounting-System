@@ -12,11 +12,13 @@ use App\Models\Country;
 use App\Models\Currency;
 use App\Models\EntityImportBatch;
 use App\Models\ImportBatch;
+use App\Models\JournalEntry;
 use App\Models\User;
 use App\Services\BranchService;
 use App\Services\CompanyCreator;
 use App\Services\EntityImportService;
 use App\Services\JournalService;
+use App\Services\PurchaseService;
 use App\Services\SalesService;
 use App\Services\SupplierMaintenanceService;
 use App\Services\TaxConfigurationService;
@@ -527,11 +529,48 @@ class ImportExportFoundationTest extends TestCase
         $this->assertSame('ready', $sales->status);
         $this->assertSame(900, $sales->total_rows);
         $this->assertSame(0, $sales->invalid_rows);
+        $this->assertSame(0, $sales->warning_rows);
+        $this->assertSame(360, $sales->documentCount());
+        $this->assertSame(0, $sales->duplicate_rows);
+        $this->actingAs($this->user)->get(route('import-export.batches.show', ['NZ', $company, $sales]))
+            ->assertOk()->assertSee('360 documents / 900 lines')->assertSee('Source Tax')->assertDontSee('Mapped Values');
+        $sales = app(ImportService::class)->confirm($company, $sales, $this->user);
+        $this->assertSame(900, $sales->imported_rows);
+        $this->assertSame(360, $sales->importedDocumentCount());
+        foreach (['INV0050' => ['1003.2500', '150.4875', '1153.7375'], 'INV0051' => ['827.5000', '124.1250', '951.6250']] as $ref => [$net, $taxAmount, $gross]) {
+            $invoice = $company->salesInvoices()->where('customer_reference', $ref)->firstOrFail();
+            $this->assertSame($net, $invoice->subtotal);
+            $this->assertSame($taxAmount, $invoice->tax_amount);
+            $this->assertSame($gross, $invoice->total);
+            $this->assertSame('draft', $invoice->status);
+            $this->assertNull($invoice->journal_entry_id);
+            app(SalesService::class)->postInvoice($invoice, $this->user);
+            $invoice->refresh();
+            $this->assertSame('posted', $invoice->status);
+            $debits = $invoice->journal->lines->reduce(fn ($sum, $line) => bcadd($sum, $line->debit, 4), '0.0000');
+            $credits = $invoice->journal->lines->reduce(fn ($sum, $line) => bcadd($sum, $line->credit, 4), '0.0000');
+            $this->assertSame($gross, $debits);
+            $this->assertSame($debits, $credits);
+            $this->assertSame($taxAmount, $invoice->journal->lines()->where('account_id', $company->accounts()->where('code', '2100')->value('id'))->value('credit'));
+        }
 
         $bills = $this->sampleBatch($company, 'supplier_bills', '09_supplier_bills.csv');
         $this->assertSame('ready', $bills->status);
         $this->assertSame(381, $bills->total_rows);
         $this->assertSame(0, $bills->invalid_rows);
+        $this->assertSame(0, $bills->warning_rows);
+        $this->assertSame(190, $bills->documentCount());
+        $bills = app(ImportService::class)->confirm($company, $bills, $this->user);
+        $this->assertSame(381, $bills->imported_rows);
+        $this->assertSame(190, $bills->importedDocumentCount());
+        $bill = $company->supplierBills()->where('supplier_reference', 'BILL0001')->firstOrFail();
+        app(PurchaseService::class)->post($company, 'bills', $bill, $this->user);
+        $bill->refresh();
+        $this->assertSame('posted', $bill->status);
+        $billJournal = JournalEntry::with('lines')->findOrFail($bill->journal_entry_id);
+        $debits = $billJournal->lines->reduce(fn ($sum, $line) => bcadd($sum, $line->debit, 4), '0.0000');
+        $credits = $billJournal->lines->reduce(fn ($sum, $line) => bcadd($sum, $line->credit, 4), '0.0000');
+        $this->assertSame($debits, $credits);
     }
 
     public function test_entity_import_rejects_jurisdiction_type_duplicates_and_foreign_batches_and_exports_setup(): void
