@@ -4,6 +4,7 @@
     <h1 class="mb-0">{{ $journal->journal_number }} <span class="badge bg-secondary">{{ ucfirst($journal->status) }}</span></h1>
     @if($journal->status === 'draft' && ! $journal->reversal_of_id)<a class="btn btn-primary" href="{{ route('journals.edit', [$company, $journal]) }}">Edit Draft</a>@endif
 </div>
+<a class="btn btn-outline-secondary mb-3" href="{{ route('accounting', ['country_id' => $company->country_id, 'company_id' => $company->id]) }}">&larr; Back to Journal Entries</a>
 @if($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach @if($journal->status === 'draft')<li><a href="{{ route('journals.edit', [$company, $journal]) }}">Edit this Draft to correct it</a></li>@endif</ul></div>@endif
 <div class="card p-4">
     <p>{{ $journal->transaction_date->format('d M Y') }} · {{ $journal->description }}</p>

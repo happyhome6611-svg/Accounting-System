@@ -15,6 +15,7 @@ use App\Services\JournalService;
 use App\Services\PriorPeriodAdjustmentService;
 use Carbon\CarbonImmutable;
 use Database\Seeders\DatabaseSeeder;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
@@ -58,6 +59,25 @@ class EntityFinancialYearFoundationTest extends TestCase
         $year = $service->create($this->company, ['name' => '2027-2028', 'starts_on' => '2027-04-01', 'ends_on' => '2028-03-31'], $this->user);
         $this->assertCount(12, $year->periods);
         $this->assertThrows(fn () => $service->create($this->company, ['name' => 'Overlap', 'starts_on' => '2028-01-01', 'ends_on' => '2028-12-31'], $this->user), ValidationException::class);
+    }
+
+    public function test_duplicate_year_dates_are_prevented_per_entity_but_valid_across_entities(): void
+    {
+        $service = app(FinancialYearService::class);
+        $existing = $this->company->financialYears()->firstOrFail();
+        $this->assertThrows(fn () => $service->create($this->company, ['name' => 'Different Label', 'starts_on' => $existing->starts_on->toDateString(), 'ends_on' => $existing->ends_on->toDateString()], $this->user), ValidationException::class);
+        $this->assertSame(1, $this->company->financialYears()->count());
+
+        $other = $this->entity('company', 'Same Dates Other Entity');
+        $otherYear = $other->financialYears()->firstOrFail();
+        $this->assertSame($existing->starts_on->toDateString(), $otherYear->starts_on->toDateString());
+        $this->assertSame($existing->ends_on->toDateString(), $otherYear->ends_on->toDateString());
+
+        $this->assertThrows(fn () => $this->company->financialYears()->create([
+            'name' => 'Database Race Duplicate', 'starts_on' => $existing->starts_on, 'ends_on' => $existing->ends_on,
+            'status' => 'open', 'is_current' => false, 'created_by' => $this->user->id, 'updated_by' => $this->user->id,
+        ]), QueryException::class);
+        $this->assertSame(1, $this->company->financialYears()->count());
     }
 
     public function test_date_resolution_is_entity_scoped_and_rejects_outside_or_closed_year(): void

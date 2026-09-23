@@ -114,6 +114,25 @@ class DraftJournalMaintenanceTest extends TestCase
         $this->get(route('journals.show', [$this->company, $journal]))->assertOk()->assertSee('Edit Draft')->assertSee('Delete Draft');
     }
 
+    public function test_journal_navigation_posting_reversal_and_accounting_dates_preserve_entity_context(): void
+    {
+        $draft = $this->draft();
+        $backUrl = route('accounting', ['country_id' => $this->company->country_id, 'company_id' => $this->company->id]);
+        $this->actingAs($this->user)->get(route('journals.show', [$this->company, $draft]))
+            ->assertOk()->assertSee('Back to Journal Entries')->assertSee($backUrl);
+        $this->get($backUrl)->assertOk()->assertSee($draft->transaction_date->format('d M Y'))->assertDontSee('00:00:00');
+
+        $this->post(route('journals.post', [$this->company, $draft]))->assertRedirect()->assertSessionHas('success', 'Journal posted successfully.');
+        $this->get(route('journals.show', [$this->company, $draft]))->assertOk()->assertSee('Posted')->assertSee($backUrl);
+        $reversal = $this->service->reverse($draft->fresh(), $this->user, $this->period->id, $this->period->starts_on->toDateString());
+        $this->get(route('journals.show', [$this->company, $draft]))->assertOk()->assertSee('Reversed')->assertSee($backUrl);
+        $this->get(route('journals.show', [$this->company, $reversal]))->assertOk()->assertSee($backUrl);
+
+        $other = $this->makeCompany($this->user, 'Navigation Other');
+        $this->get(route('journals.show', [$other, $draft]))->assertNotFound();
+        $this->get(route('accounting', ['country_id' => $this->company->country_id, 'company_id' => $other->id]))->assertOk()->assertDontSee($draft->journal_number);
+    }
+
     private function draft(string $debit = '100', string $credit = '100')
     {
         $accounts = $this->company->accounts()->get();

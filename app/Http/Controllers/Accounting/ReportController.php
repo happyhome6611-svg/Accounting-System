@@ -29,9 +29,12 @@ class ReportController extends Controller
         $countries = $this->jurisdictions->countriesFor($r->user(), false);
         $country = $r->filled('country_id') ? $this->jurisdictions->country($r->integer('country_id')) : $countries->first();
         abort_if($country && ! $countries->contains('id', $country->id), 404);
-        $companies = $country ? $r->user()->companies()->where('country_id', $country->id)->with(['branches' => fn ($q) => $q->where('is_active', true)->orderBy('code'), 'accounts' => fn ($q) => $q->where('is_active', true)->orderBy('code'), 'financialYears' => fn ($q) => $q->orderByDesc('starts_on')])->get() : collect();
+        $companies = $country ? $r->user()->companies()->where('country_id', $country->id)->with(['branches' => fn ($q) => $q->where('is_active', true)->orderBy('code'), 'accounts' => fn ($q) => $q->where('is_active', true)->orderBy('code')])->get() : collect();
+        $company = $r->filled('company_id') ? $companies->firstWhere('id', $r->integer('company_id')) : $companies->first();
+        abort_if($r->filled('company_id') && ! $company, 404);
+        $financialYears = $company?->financialYears()->orderByDesc('starts_on')->orderByDesc('ends_on')->orderByDesc('id')->get() ?? collect();
 
-        return view('reports.index', compact('countries', 'country', 'companies'));
+        return view('reports.index', compact('countries', 'country', 'companies', 'company', 'financialYears'));
     }
 
     public function ledger(Request $r)

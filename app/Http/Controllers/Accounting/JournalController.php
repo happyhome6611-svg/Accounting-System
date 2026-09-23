@@ -89,7 +89,7 @@ class JournalController extends Controller
         $this->show($r, $company, $journal);
         $s->post($journal, $r->user());
 
-        return back()->with('success', 'Journal posted.');
+        return back()->with('success', 'Journal posted successfully.');
     }
 
     public function reverse(Request $r, Company $company, JournalEntry $journal, JournalService $s)

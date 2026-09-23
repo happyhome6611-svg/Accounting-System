@@ -15,12 +15,12 @@ final class FinancialYearService
 
     public function create(Company $entity, array $data, User $user): FinancialYear
     {
-        $overlaps = $entity->financialYears()->whereDate('starts_on', '<=', $data['ends_on'])->whereDate('ends_on', '>=', $data['starts_on'])->exists();
-        if ($overlaps) {
-            throw ValidationException::withMessages(['starts_on' => 'Financial Years cannot overlap for the same accounting entity.']);
-        }
-
         return DB::transaction(function () use ($entity, $data, $user) {
+            Company::whereKey($entity->id)->lockForUpdate()->firstOrFail();
+            $overlaps = $entity->financialYears()->whereDate('starts_on', '<=', $data['ends_on'])->whereDate('ends_on', '>=', $data['starts_on'])->exists();
+            if ($overlaps) {
+                throw ValidationException::withMessages(['starts_on' => 'Financial Years cannot overlap or duplicate dates for the same accounting entity.']);
+            }
             $year = $entity->financialYears()->create($data + ['status' => 'open', 'is_current' => false, 'created_by' => $user->id, 'updated_by' => $user->id]);
             $start = CarbonImmutable::parse($data['starts_on']);
             $end = CarbonImmutable::parse($data['ends_on']);
