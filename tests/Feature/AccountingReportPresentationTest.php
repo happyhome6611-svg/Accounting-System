@@ -70,6 +70,91 @@ class AccountingReportPresentationTest extends TestCase
             ->assertOk()->assertSee('Financial Year:')->assertSee('2025-2026')->assertSee('01 Apr 2025 – 31 Mar 2026');
         $this->get(route('reports.ledger', ['country_id' => $country->id, 'company_id' => $company->id, 'financial_year_id' => $older->id, 'account_id' => $account->id]))
             ->assertOk()->assertSee('FY 2024')->assertSee('01 Apr 2024 – 31 Mar 2025');
+        foreach ([null, $selected->id, 'all'] as $yearFilter) {
+            foreach (['reports.ledger', 'reports.trial', 'reports.profit-loss', 'reports.balance-sheet'] as $route) {
+                $parameters = ['country_id' => $country->id, 'company_id' => $company->id, 'account_id' => $account->id];
+                if ($yearFilter !== null) {
+                    $parameters['financial_year_id'] = $yearFilter;
+                }
+                $this->get(route($route, $parameters))->assertOk();
+            }
+        }
         CarbonImmutable::setTestNow();
+    }
+
+    public function test_report_landing_recovers_from_stale_country_and_entity_context(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+        $user = User::factory()->create();
+        $nz = Country::where('code', 'NZ')->firstOrFail();
+        $au = Country::where('code', 'AU')->firstOrFail();
+        $nzCompany = app(CompanyCreator::class)->create(['name' => 'Aotearoa Books', 'legal_name' => 'Aotearoa Books', 'country_id' => $nz->id, 'base_currency_id' => Currency::where('code', 'NZD')->value('id'), 'timezone' => 'Pacific/Auckland', 'financial_year_start' => '2026-04-01', 'financial_year_end' => '2027-03-31'], $user);
+        $auCompany = app(CompanyCreator::class)->create(['name' => 'Australian Books', 'legal_name' => 'Australian Books', 'country_id' => $au->id, 'base_currency_id' => Currency::where('code', 'AUD')->value('id'), 'timezone' => 'Australia/Sydney', 'financial_year_start' => '2026-07-01', 'financial_year_end' => '2027-06-30'], $user);
+        $auBranch = $auCompany->branches()->firstOrFail();
+        $auBranch->update(['name' => 'Sydney Foreign Branch']);
+        $auYear = $auCompany->financialYears()->firstOrFail();
+        $auYear->update(['name' => 'Australian Foreign Year']);
+        $auAccount = $auCompany->accounts()->firstOrFail();
+
+        $response = $this->actingAs($user)->get(route('reports', [
+            'country_id' => $nz->id,
+            'company_id' => $auCompany->id,
+            'branch_id' => $auBranch->id,
+            'financial_year_id' => $auYear->id,
+            'account_id' => $auAccount->id,
+        ]))->assertOk()->assertSee('Aotearoa Books')->assertDontSee('Australian Books')->assertDontSee('Sydney Foreign Branch')->assertDontSee('Australian Foreign Year');
+
+        preg_match('/<select id="report-account".*?<\/select>/s', $response->getContent(), $accountSelect);
+        $this->assertNotEmpty($accountSelect);
+        $this->assertStringNotContainsString('value="'.$auAccount->id.'"', $accountSelect[0]);
+        $response->assertSee('changeReportCountry(this.form)', false)
+            ->assertSee("['company_id', 'branch_id', 'financial_year_id', 'account_id']", false)
+            ->assertSee("['branch_id', 'financial_year_id', 'account_id']", false);
+
+        $this->assertSame($nzCompany->id, $response->viewData('company')->id);
+    }
+
+    public function test_company_switch_clears_stale_dependencies_and_report_execution_remains_strict(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+        $user = User::factory()->create();
+        $nz = Country::where('code', 'NZ')->firstOrFail();
+        $au = Country::where('code', 'AU')->firstOrFail();
+        $currency = Currency::where('code', 'NZD')->firstOrFail();
+        $first = app(CompanyCreator::class)->create(['name' => 'First Entity', 'legal_name' => 'First Entity', 'country_id' => $nz->id, 'base_currency_id' => $currency->id, 'timezone' => 'Pacific/Auckland', 'financial_year_start' => '2026-04-01', 'financial_year_end' => '2027-03-31'], $user);
+        $second = app(CompanyCreator::class)->create(['name' => 'Second Entity', 'legal_name' => 'Second Entity', 'country_id' => $nz->id, 'base_currency_id' => $currency->id, 'timezone' => 'Pacific/Auckland', 'financial_year_start' => '2026-04-01', 'financial_year_end' => '2027-03-31'], $user);
+        $australian = app(CompanyCreator::class)->create(['name' => 'Australian Entity', 'legal_name' => 'Australian Entity', 'country_id' => $au->id, 'base_currency_id' => Currency::where('code', 'AUD')->value('id'), 'timezone' => 'Australia/Sydney', 'financial_year_start' => '2026-07-01', 'financial_year_end' => '2027-06-30'], $user);
+        $firstBranch = $first->branches()->firstOrFail();
+        $firstBranch->update(['name' => 'First Entity Branch']);
+        $firstYear = $first->financialYears()->firstOrFail();
+        $firstYear->update(['name' => 'First Entity Year']);
+        $firstAccount = $first->accounts()->firstOrFail();
+
+        $response = $this->actingAs($user)->get(route('reports', ['country_id' => $nz->id, 'company_id' => $second->id, 'branch_id' => $firstBranch->id, 'financial_year_id' => $firstYear->id, 'account_id' => $firstAccount->id]))
+            ->assertOk()->assertSee('Second Entity')->assertDontSee('First Entity Branch')->assertDontSee('First Entity Year');
+        $this->assertSame($second->accounts()->orderBy('code')->value('id'), $response->viewData('selectedAccountId'));
+        $this->assertNull($response->viewData('selectedBranchId'));
+        $this->assertNull($response->viewData('selectedFinancialYearId'));
+
+        $mixedJurisdiction = ['country_id' => $nz->id, 'company_id' => $australian->id, 'account_id' => $australian->accounts()->firstOrFail()->id];
+        foreach (['reports.ledger', 'reports.trial', 'reports.profit-loss', 'reports.balance-sheet'] as $route) {
+            $this->get(route($route, $mixedJurisdiction))->assertNotFound();
+        }
+
+        $this->get(route('reports.ledger', ['country_id' => $nz->id, 'company_id' => $second->id, 'account_id' => $firstAccount->id]))->assertNotFound();
+        $this->get(route('reports.trial', ['country_id' => $nz->id, 'company_id' => $second->id, 'branch_id' => $firstBranch->id]))->assertNotFound();
+        $this->get(route('reports.profit-loss', ['country_id' => $nz->id, 'company_id' => $second->id, 'financial_year_id' => $firstYear->id]))->assertNotFound();
+        $this->get(route('reports.balance-sheet', ['country_id' => $nz->id, 'company_id' => $second->id, 'branch_id' => $firstBranch->id]))->assertNotFound();
+    }
+
+    public function test_individual_report_landing_is_branchless(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+        $user = User::factory()->create();
+        $country = Country::where('code', 'NZ')->firstOrFail();
+        $individual = app(CompanyCreator::class)->create(['entity_type' => 'individual', 'name' => 'Personal Ledger', 'individual_name' => 'Personal Ledger', 'country_id' => $country->id, 'base_currency_id' => Currency::where('code', 'NZD')->value('id'), 'timezone' => 'Pacific/Auckland', 'financial_year_start' => '2026-04-01', 'financial_year_end' => '2027-03-31'], $user);
+
+        $this->actingAs($user)->get(route('reports', ['country_id' => $country->id, 'company_id' => $individual->id, 'branch_id' => 999999]))
+            ->assertOk()->assertSee('Not applicable')->assertSee('id="report-branch" name="branch_id" class="form-select" disabled', false);
     }
 }

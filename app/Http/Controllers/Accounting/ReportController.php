@@ -29,12 +29,21 @@ class ReportController extends Controller
         $countries = $this->jurisdictions->countriesFor($r->user(), false);
         $country = $r->filled('country_id') ? $this->jurisdictions->country($r->integer('country_id')) : $countries->first();
         abort_if($country && ! $countries->contains('id', $country->id), 404);
-        $companies = $country ? $r->user()->companies()->where('country_id', $country->id)->with(['branches' => fn ($q) => $q->where('is_active', true)->orderBy('code'), 'accounts' => fn ($q) => $q->where('is_active', true)->orderBy('code')])->get() : collect();
-        $company = $r->filled('company_id') ? $companies->firstWhere('id', $r->integer('company_id')) : $companies->first();
-        abort_if($r->filled('company_id') && ! $company, 404);
+        $companies = $country ? $r->user()->companies()->where('country_id', $country->id)->orderBy('name')->get() : collect();
+        $company = $r->filled('company_id') ? $companies->firstWhere('id', $r->integer('company_id')) : null;
+        $company ??= $companies->first();
+        $branches = $company?->supportsBranches() ? $company->branches()->where('is_active', true)->orderBy('code')->get() : collect();
         $financialYears = $company?->financialYears()->orderByDesc('starts_on')->orderByDesc('ends_on')->orderByDesc('id')->get() ?? collect();
+        $accounts = $company?->accounts()->where('is_active', true)->orderBy('code')->get() ?? collect();
+        $selectedBranchId = $r->filled('branch_id') && $branches->contains('id', $r->integer('branch_id')) ? $r->integer('branch_id') : null;
+        $selectedFinancialYearId = $r->input('financial_year_id') === 'all'
+            ? 'all'
+            : ($r->filled('financial_year_id') && $financialYears->contains('id', $r->integer('financial_year_id')) ? $r->integer('financial_year_id') : null);
+        $selectedAccountId = $r->filled('account_id') && $accounts->contains('id', $r->integer('account_id'))
+            ? $r->integer('account_id')
+            : $accounts->first()?->id;
 
-        return view('reports.index', compact('countries', 'country', 'companies', 'company', 'financialYears'));
+        return view('reports.index', compact('countries', 'country', 'companies', 'company', 'branches', 'financialYears', 'accounts', 'selectedBranchId', 'selectedFinancialYearId', 'selectedAccountId'));
     }
 
     public function ledger(Request $r)
