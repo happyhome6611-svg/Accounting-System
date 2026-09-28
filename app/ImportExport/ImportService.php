@@ -137,12 +137,9 @@ final class ImportService
     public function confirm(Company $company, ImportBatch $batch, User $user): ImportBatch
     {
         $this->scope($company, $batch, $user);
-        if ($batch->data_type === 'opening_balances') {
-            throw ValidationException::withMessages(['batch' => 'Opening balances are validated staging only in v0.8; posting is intentionally unavailable.']);
-        }
         $batch = DB::transaction(function () use ($company, $batch, $user) {
             $batch = ImportBatch::where('company_id', $company->id)->lockForUpdate()->findOrFail($batch->id);
-            if (in_array($batch->status, ['completed', 'completed_with_errors'], true)) {
+            if (in_array($batch->status, ['completed', 'completed_with_errors', 'staged'], true)) {
                 return $batch;
             }
             if ($batch->status !== 'ready') {
@@ -152,7 +149,7 @@ final class ImportService
 
             return $batch;
         });
-        if (in_array($batch->status, ['completed', 'completed_with_errors'], true)) {
+        if (in_array($batch->status, ['completed', 'completed_with_errors', 'staged'], true)) {
             return $batch;
         }
         $adapter = $this->adapters->get($batch->data_type);
@@ -168,7 +165,8 @@ final class ImportService
             try {
                 DB::transaction(function () use ($adapter, $company, $group, $batch, $user, &$imported) {
                     $values = $group->pluck('mapped_values')->all();
-                    $model = method_exists($adapter, 'importGroup') ? $adapter->importGroup($company, $values, $batch->options, $user) : $adapter->import($company, $values[0], $batch->options, $user);
+                    $options = [...$batch->options, 'import_batch_id' => $batch->id];
+                    $model = method_exists($adapter, 'importGroup') ? $adapter->importGroup($company, $values, $options, $user) : $adapter->import($company, $values[0], $options, $user);
                     foreach ($group as $row) {
                         $row->update(['validation_status' => 'imported', 'result_model' => $model::class, 'result_id' => $model->getKey()]);
                         $imported++;
@@ -181,7 +179,7 @@ final class ImportService
                 $failed += $group->count();
             }
         }
-        $status = $failed ? ($imported ? 'completed_with_errors' : 'failed') : 'completed';
+        $status = $failed ? ($imported ? 'completed_with_errors' : 'failed') : ($batch->data_type === 'opening_balances' ? 'staged' : 'completed');
         $batch->update(['status' => $status, 'imported_rows' => $imported, 'failed_rows' => $failed, 'skipped_rows' => $skipped]);
         $this->audit->log($failed ? 'import.completed_with_errors' : 'import.completed', $batch, $company->id, $user->id, null, compact('imported', 'failed', 'skipped'));
 

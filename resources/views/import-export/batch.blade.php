@@ -54,18 +54,18 @@
 </tbody></table></div></div>
 @endif
 
-@if($batch->data_type === 'opening_balances' && $batch->status === 'ready')
-<div class="alert alert-info mt-3">Balanced Opening Balance staging is ready. Ledger posting is intentionally deferred to a later controlled workflow.</div>
+@if($batch->data_type === 'opening_balances' && in_array($batch->status, ['validated', 'ready']))
+<div class="alert alert-info mt-3">Opening Balances will be imported into staging only. No General Ledger entries will be created.</div>
 @endif
 
 <div class="d-flex flex-wrap gap-2 mt-3">
-@if($batch->undo_status !== 'undone' && ($batch->hasCreatedRecords() || $batch->data_type === 'opening_balances' && $batch->rows()->whereNull('undone_at')->exists()))
+@if($batch->undo_status !== 'undone' && $batch->hasCreatedRecords())
 <a class="btn btn-outline-danger" href="{{ route('import-export.batches.undo.show', [$company->country->code, $company, $batch]) }}">Undo Import</a>
 @elseif($batch->undo_status !== 'undone' && in_array($batch->status, ['completed', 'completed_with_errors', 'failed', 'cancelled']))
 <form method="post" action="{{ route('import-export.batches.delete-attempt', [$company->country->code, $company, $batch]) }}" onsubmit="return confirm('Delete this zero-record import attempt?')">@csrf @method('DELETE')<button class="btn btn-outline-danger">Delete Import Attempt</button></form>
 @endif
-@if($batch->status === 'ready' && $batch->data_type !== 'opening_balances')
-<form method="post" action="{{ route('import-export.batches.confirm', [$company->country->code, $company, $batch]) }}" onsubmit="return confirm('Confirm this import? Valid non-duplicate rows will create production records.')">@csrf<button class="btn btn-success">Confirm Import</button></form>
+@if($batch->status === 'ready')
+<form method="post" action="{{ route('import-export.batches.confirm', [$company->country->code, $company, $batch]) }}" onsubmit="return confirm('{{ $batch->data_type === 'opening_balances' ? 'Confirm this import? Valid rows will be saved to Opening Balance staging without creating General Ledger entries.' : 'Confirm this import? Valid non-duplicate rows will create production records.' }}')">@csrf<button class="btn btn-primary">Confirm Import</button></form>
 <a class="btn btn-outline-primary" href="{{ route('import-export.batches.show', [$company->country->code, $company, $batch, 'change_mapping' => 1]) }}">Change Mapping</a>
 @endif
 @if(in_array($batch->status, ['uploaded', 'mapping', 'validated', 'ready']))
@@ -76,8 +76,31 @@
 @endif
 </div>
 
-@if(in_array($batch->status, ['completed', 'completed_with_errors', 'failed', 'cancelled']))
-<div class="card card-body mt-4"><h2 class="h5">Import Result</h2>@if($batch->documentField())<p>Documents: {{ $batch->documentCount() }} · Lines: {{ $batch->total_rows }} · Imported documents: {{ $batch->importedDocumentCount() }} · Imported lines: {{ $batch->imported_rows }} · Warnings: {{ $batch->warning_rows }} · Errors/Failed: {{ $batch->failed_rows + $batch->invalid_rows }}</p>@else<p>Imported: {{ $batch->imported_rows }} · Skipped/Duplicates: {{ $batch->duplicate_rows }} · Warnings: {{ $batch->warning_rows }} · Failed: {{ $batch->failed_rows + $batch->invalid_rows }}</p>@endif<div class="d-flex flex-wrap gap-2"><a class="btn btn-primary" href="{{ route('import-export.imports.create', [$company->country->code, $company]) }}">Import Another File</a><a class="btn btn-outline-secondary" href="{{ route('import-export.workspace', [$company->country->code, $company]) }}">Return to Import & Export</a></div></div>
+@if(in_array($batch->status, ['completed', 'completed_with_errors', 'failed', 'cancelled', 'staged']))
+<div class="card card-body mt-4">
+    <h2 class="h5">{{ $batch->undo_status === 'undone' ? 'Import Undone' : ($batch->status === 'staged' ? 'Opening Balances Imported to Staging' : 'Import Result') }}</h2>
+    @if($batch->documentField())
+        <p>Documents: {{ $batch->documentCount() }} · Lines: {{ $batch->total_rows }} · Imported documents: {{ $batch->importedDocumentCount() }} · Imported lines: {{ $batch->imported_rows }} · Warnings: {{ $batch->warning_rows }} · Errors/Failed: {{ $batch->failed_rows + $batch->invalid_rows }}</p>
+    @else
+        <p>Imported: {{ $batch->imported_rows }} · Skipped/Duplicates: {{ $batch->duplicate_rows }} · Warnings: {{ $batch->warning_rows }} · Failed: {{ $batch->failed_rows + $batch->invalid_rows }}</p>
+    @endif
+    @if($batch->status === 'staged' && $batch->undo_status !== 'undone')
+        @php($stagedLines = \App\Models\OpeningBalanceStagingLine::whereIn('opening_balance_staging_id', \App\Models\OpeningBalanceStaging::where('import_batch_id', $batch->id)->select('id'))->get())
+        @php($stagedDebit = $stagedLines->reduce(fn ($sum, $line) => bcadd($sum, $line->debit, 4), '0.0000'))
+        @php($stagedCredit = $stagedLines->reduce(fn ($sum, $line) => bcadd($sum, $line->credit, 4), '0.0000'))
+        <p>{{ $batch->imported_rows }} opening balance rows were successfully staged.</p>
+        <p>Total Debit: {{ $company->baseCurrency->code }} {{ number_format((float) $stagedDebit, 2) }} · Total Credit: {{ $company->baseCurrency->code }} {{ number_format((float) $stagedCredit, 2) }} · Difference: {{ $company->baseCurrency->code }} {{ number_format((float) bcsub($stagedDebit, $stagedCredit, 4), 2) }}</p>
+        <p class="mb-3">No General Ledger entries have been created. <span class="badge text-bg-info">STAGED</span></p>
+    @endif
+    <div class="d-flex flex-wrap gap-2">
+        @if($batch->status === 'staged' && $batch->undo_status !== 'undone')
+            <a class="btn btn-primary" href="{{ route('accounting.opening-balances', [$company->country->code, $company]) }}">View Staged Opening Balances</a>
+        @else
+            <a class="btn btn-primary" href="{{ route('import-export.imports.create', [$company->country->code, $company]) }}">Import Another File</a>
+        @endif
+        <a class="btn btn-outline-secondary" href="{{ route('import-export.workspace', [$company->country->code, $company]) }}">Back to Import & Export</a>
+    </div>
+</div>
 @endif
 
 @if(in_array($batch->status, ['validated', 'ready']))

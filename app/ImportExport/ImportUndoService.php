@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\ImportBatch;
 use App\Models\Item;
 use App\Models\JournalEntry;
+use App\Models\OpeningBalanceStaging;
 use App\Models\SalesInvoice;
 use App\Models\Supplier;
 use App\Models\SupplierBill;
@@ -42,12 +43,6 @@ final class ImportUndoService
         foreach ($batch->rows()->whereNotNull('result_id')->get()->unique(fn ($row) => $row->result_model.'#'.$row->result_id) as $row) {
             $entries[] = $this->classify($company, $batch, $row->result_model, (int) $row->result_id);
         }
-        if ($batch->data_type === 'opening_balances' && $entries === []) {
-            $count = $batch->rows()->whereNull('undone_at')->count();
-            if ($count) {
-                $entries[] = ['classification' => 'SAFE_TO_REMOVE', 'type' => 'Opening Balance staging rows', 'id' => null, 'reason' => "{$count} unposted staging rows will be removed."];
-            }
-        }
         $counts = collect($entries)->countBy('classification');
 
         return [
@@ -74,6 +69,9 @@ final class ImportUndoService
             throw ValidationException::withMessages(['confirmation' => 'Type UNDO exactly to confirm.']);
         }
         $preflight = $this->analysis($company, $batch, $user);
+        if ($preflight['created_records'] === 0 && $preflight['already_undone'] === 0) {
+            throw ValidationException::withMessages(['undo' => 'This import has no created or staged records to undo. Cancel or delete the import attempt instead.']);
+        }
         if ($preflight['blocked']) {
             $batch->update(['undo_status' => 'blocked', 'undo_summary' => $preflight]);
             $this->audit->log('import.undo_blocked', $batch, $company->id, $user->id, null, $preflight);
@@ -102,9 +100,6 @@ final class ImportUndoService
                 $undoResult = $this->remove($company, $batch, $model, $user, $reversalDate);
                 $batch->rows()->where('result_model', $row->result_model)->where('result_id', $row->result_id)->update(['validation_status' => 'skipped', 'undone_at' => now(), 'undo_result_model' => $undoResult ? $undoResult::class : null, 'undo_result_id' => $undoResult?->getKey()]);
             }
-            if ($batch->data_type === 'opening_balances') {
-                $batch->rows()->whereNull('undone_at')->update(['validation_status' => 'skipped', 'undone_at' => now()]);
-            }
             $final = $this->analysis($company, $batch, $user);
             $batch->update(['undo_status' => 'undone', 'undo_summary' => $analysis, 'undone_by' => $user->id, 'undone_at' => now()]);
             $this->audit->log('import.undone', $batch, $company->id, $user->id, null, ['preflight' => $analysis, 'result' => $final]);
@@ -116,7 +111,7 @@ final class ImportUndoService
     public function deleteAttempt(Company $company, ImportBatch $batch, User $user): void
     {
         $this->authorize($company, $batch, $user);
-        if ($batch->hasCreatedRecords() || $batch->data_type === 'opening_balances' && $batch->rows()->whereNull('undone_at')->exists()) {
+        if ($batch->hasCreatedRecords()) {
             throw ValidationException::withMessages(['batch' => 'This batch created or staged records. Use Undo Import instead.']);
         }
         DB::transaction(function () use ($company, $batch, $user) {
@@ -146,6 +141,7 @@ final class ImportUndoService
             Account::class => $this->accountBlockers($model),
             SalesInvoice::class => $model->status === 'draft' && ! $model->allocations()->exists() && ! $model->creditNotes()->exists() ? [] : ['Posted or dependent invoices require an explicit correction workflow and cannot be hard-deleted.'],
             SupplierBill::class => $model->status === 'draft' && ! $model->allocations()->exists() && ! $model->credits()->exists() ? [] : ['Posted or dependent bills require an explicit correction workflow and cannot be hard-deleted.'],
+            OpeningBalanceStaging::class => $model->status === 'staged' && ! $model->converted_journal_id ? [] : ['Converted Opening Balances cannot be removed from staging.'],
             default => [],
         };
         if ($blockers) {
@@ -173,6 +169,10 @@ final class ImportUndoService
             JournalEntry::class => $model->status === 'draft'
                 ? tap(null, fn () => $this->journals->deleteDraft($model, $user))
                 : $this->journals->reverse($model, $user, $company->financialYears()->whereHas('periods', fn ($query) => $query->whereDate('starts_on', '<=', $reversalDate)->whereDate('ends_on', '>=', $reversalDate)->where('status', 'open'))->firstOrFail()->periods()->whereDate('starts_on', '<=', $reversalDate)->whereDate('ends_on', '>=', $reversalDate)->value('id'), $reversalDate),
+            OpeningBalanceStaging::class => tap(null, function () use ($model) {
+                $model->lines()->delete();
+                $model->delete();
+            }),
             default => throw ValidationException::withMessages(['undo' => 'This imported record type is not supported for undo.']),
         };
     }
@@ -187,6 +187,7 @@ final class ImportUndoService
             'sales_invoices' => SalesInvoice::class,
             'supplier_bills' => SupplierBill::class,
             'manual_journals' => JournalEntry::class,
+            'opening_balances' => OpeningBalanceStaging::class,
             default => '',
         };
     }

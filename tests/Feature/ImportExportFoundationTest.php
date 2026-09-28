@@ -7,12 +7,14 @@ use App\ImportExport\FileParser;
 use App\ImportExport\HeaderMapper;
 use App\ImportExport\ImportAdapterRegistry;
 use App\ImportExport\ImportService;
+use App\ImportExport\ImportUndoService;
 use App\Models\Company;
 use App\Models\Country;
 use App\Models\Currency;
 use App\Models\EntityImportBatch;
 use App\Models\ImportBatch;
 use App\Models\JournalEntry;
+use App\Models\OpeningBalanceStaging;
 use App\Models\User;
 use App\Services\BranchService;
 use App\Services\CompanyCreator;
@@ -241,7 +243,7 @@ class ImportExportFoundationTest extends TestCase
             ->assertOk()
             ->assertSee('Import Result')
             ->assertSee('Import Another File')
-            ->assertSee('Return to Import & Export', false);
+            ->assertSee('Back to Import & Export', false);
         $this->assertDatabaseHas('customers', ['company_id' => $this->company->id, 'code' => 'WEB001']);
     }
 
@@ -525,6 +527,43 @@ class ImportExportFoundationTest extends TestCase
         $this->assertSame(40, $products->imported_rows);
         $this->assertSame(40, $company->items()->count());
 
+        $journalCount = $company->journals()->count();
+        $opening = $this->sampleBatch($company, 'opening_balances', '13_opening_balances.csv');
+        $this->assertSame('ready', $opening->status);
+        $this->assertSame(9, $opening->total_rows);
+        $this->assertSame(9, $opening->valid_rows);
+        $this->assertSame(0, $opening->warning_rows);
+        $this->assertSame(0, $opening->imported_rows);
+        $preview = $this->actingAs($this->user)->get(route('import-export.batches.show', ['NZ', $company, $opening]));
+        $preview->assertOk()->assertSee('Confirm Import')->assertSee('Cancel Import')->assertDontSee('Undo Import')->assertSee('No General Ledger entries will be created');
+
+        $opening = app(ImportService::class)->confirm($company, $opening, $this->user);
+        $this->assertSame('staged', $opening->status);
+        $this->assertSame(9, $opening->imported_rows);
+        $staging = OpeningBalanceStaging::with('lines')->where('import_batch_id', $opening->id)->firstOrFail();
+        $this->assertCount(9, $staging->lines);
+        $this->assertSame('97000.0000', $staging->lines->reduce(fn ($sum, $line) => bcadd($sum, $line->debit, 4), '0.0000'));
+        $this->assertSame('97000.0000', $staging->lines->reduce(fn ($sum, $line) => bcadd($sum, $line->credit, 4), '0.0000'));
+        $this->assertSame($journalCount, $company->journals()->count());
+        app(ImportService::class)->confirm($company, $opening, $this->user);
+        $this->assertSame(1, OpeningBalanceStaging::where('import_batch_id', $opening->id)->count());
+
+        $result = $this->get(route('import-export.batches.show', ['NZ', $company, $opening]));
+        $result->assertOk()->assertSee('Opening Balances Imported to Staging')->assertSee('9 opening balance rows were successfully staged')->assertSee('97,000.00')->assertSee('Undo Import')->assertSee('View Staged Opening Balances')->assertDontSee('Cancel Import')->assertDontSee('Confirm Import');
+        $this->get(route('accounting.opening-balances', ['NZ', $company]))->assertOk()->assertSee('OPENING-2025')->assertSee('Opening business bank')->assertSee('97,000.00')->assertSee('STAGED');
+
+        app(ImportUndoService::class)->undo($company, $opening, $this->user, 'UNDO');
+        app(ImportUndoService::class)->undo($company, $opening->fresh(), $this->user, 'UNDO');
+        $this->assertDatabaseMissing('opening_balance_stagings', ['import_batch_id' => $opening->id]);
+        $this->assertDatabaseHas('import_batches', ['id' => $opening->id, 'undo_status' => 'undone']);
+        $this->assertSame($journalCount, $company->journals()->count());
+        $this->get(route('import-export.batches.show', ['NZ', $company, $opening]))
+            ->assertOk()->assertSee('Import Undone')->assertSee('Import Another File')->assertDontSee('View Staged Opening Balances')->assertDontSee('Undo Import');
+
+        $openingAgain = $this->sampleBatch($company, 'opening_balances', '13_opening_balances.csv');
+        $this->assertSame('ready', $openingAgain->status);
+        $this->assertSame(0, $openingAgain->duplicate_rows);
+
         $sales = $this->sampleBatch($company, 'sales_invoices', '07_sales_invoices.csv');
         $this->assertSame('ready', $sales->status);
         $this->assertSame(900, $sales->total_rows);
@@ -620,10 +659,10 @@ class ImportExportFoundationTest extends TestCase
         }
 
         $openingCsv = "Reference,Date,Account,Debit,Credit,Description\nOPEN1,2027-01-01,1000,500,0,Opening\nOPEN1,2027-01-01,3000,0,500,Opening\n";
-        $opening = $this->batch('opening_balances', $openingCsv, ['Reference' => 'opening_ref', 'Date' => 'date', 'Account' => 'account', 'Debit' => 'debit', 'Credit' => 'credit', 'Description' => 'description']);
-        $this->assertSame('ready', $opening->status);
-        $this->assertSame(2, $opening->warning_rows);
-        $this->assertThrows(fn () => app(ImportService::class)->confirm($this->company, $opening, $this->user), ValidationException::class);
+        $opening = $this->batch('opening_balances', $openingCsv, ['Reference' => 'opening_ref', 'Date' => 'date', 'Account' => 'account', 'Debit' => 'debit', 'Credit' => 'credit', 'Description' => 'description'], true);
+        $this->assertSame('staged', $opening->status);
+        $this->assertSame(0, $opening->warning_rows);
+        $this->assertDatabaseHas('opening_balance_stagings', ['company_id' => $this->company->id, 'import_batch_id' => $opening->id]);
         $this->assertSame(1, $this->company->journals()->count());
     }
 

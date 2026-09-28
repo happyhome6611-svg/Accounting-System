@@ -97,9 +97,16 @@ class ImportUndoTest extends TestCase
         $empty->update(['total_rows' => 381, 'duplicate_rows' => 381]);
 
         $workspace = $this->actingAs($this->user)->get(route('import-export.workspace', [$this->company->country->code, $this->company]))->assertOk();
-        $workspace->assertSee('Duplicate Only')->assertSee('Delete Import Attempt')->assertSee('Undo Import');
+        $workspace->assertSee('Duplicate Only')->assertSee('Delete Import Attempt')->assertDontSee('Undo Import');
+        $this->expectException(ValidationException::class);
         app(ImportUndoService::class)->undo($this->company, $staging, $this->user, 'UNDO');
-        $this->assertSame(0, $staging->rows()->whereNull('undone_at')->count());
+    }
+
+    public function test_zero_record_import_attempt_can_be_deleted(): void
+    {
+        $empty = $this->batch('supplier_bills', null, 0, 'completed');
+        $empty->update(['total_rows' => 381, 'duplicate_rows' => 381]);
+        $this->actingAs($this->user);
         $this->delete(route('import-export.batches.delete-attempt', [$this->company->country->code, $this->company, $empty]))->assertRedirect();
         $this->assertSoftDeleted('import_batches', ['id' => $empty->id]);
     }

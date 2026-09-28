@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Accounting\JournalController;
+use App\Http\Controllers\Accounting\OpeningBalanceController;
 use App\Http\Controllers\Accounting\ReportController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RegisteredUserController;
@@ -57,6 +58,7 @@ Route::middleware('auth')->group(function () {
     ]);
     Route::patch('/companies/{company}/branches/{branch}/status', [BranchController::class, 'status'])->name('companies.branches.status');
     Route::get('/accounting', [JournalController::class, 'index'])->name('accounting');
+    Route::get('/accounting/{country}/entities/{company}/opening-balances', OpeningBalanceController::class)->name('accounting.opening-balances');
     Route::get('/companies/{company}/journals/create', [JournalController::class, 'create'])->name('journals.create');
     Route::post('/companies/{company}/journals', [JournalController::class, 'store'])->name('journals.store');
     Route::get('/companies/{company}/journals/{journal}', [JournalController::class, 'show'])->name('journals.show');

@@ -130,6 +130,11 @@ class Company extends Model
         return $this->hasMany(ImportBatch::class);
     }
 
+    public function openingBalanceStagings()
+    {
+        return $this->hasMany(OpeningBalanceStaging::class);
+    }
+
     public function importProfiles()
     {
         return $this->hasMany(ImportProfile::class);
