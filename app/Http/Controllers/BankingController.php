@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\BankAccount;
 use App\Models\BankReconciliation;
+use App\Models\BankStatementImport;
 use App\Models\BankStatementTransaction;
 use App\Models\Company;
 use App\Models\JournalLine;
 use App\Services\BankingService;
+use App\Services\BankStatementImportUndoService;
 use App\Services\CountryJurisdictionService;
 use App\Services\MoneyFormatter;
 use Illuminate\Http\Request;
@@ -99,7 +101,9 @@ class BankingController extends Controller
         $company = $this->company($r, $country, $company);
         abort_unless($account->company_id === $company->id, 404);
 
-        return view('banking.imports', compact('company', 'account'));
+        $batches = $account->imports()->latest()->get();
+
+        return view('banking.imports', compact('company', 'account', 'batches'));
     }
 
     public function preview(Request $r, string $country, Company $company, BankAccount $account)
@@ -123,6 +127,33 @@ class BankingController extends Controller
         $batch = $s->import($company, $account, $payload['name'], $payload['csv'], $r->user(), $r->boolean('override'));
 
         return redirect()->route('banking.imports', [$country, $company, $account])->with('success', "Imported {$batch->imported_count} rows; {$batch->duplicate_count} duplicates; {$batch->error_count} errors.");
+    }
+
+    public function undoImportShow(Request $r, string $country, Company $company, BankAccount $account, BankStatementImport $batch, BankStatementImportUndoService $service)
+    {
+        $company = $this->company($r, $country, $company);
+        abort_unless($account->company_id === $company->id && $batch->bank_account_id === $account->id, 404);
+
+        return view('banking.import-undo', compact('company', 'account', 'batch') + ['analysis' => $service->analysis($company, $batch, $r->user())]);
+    }
+
+    public function undoImport(Request $r, string $country, Company $company, BankAccount $account, BankStatementImport $batch, BankStatementImportUndoService $service)
+    {
+        $company = $this->company($r, $country, $company);
+        abort_unless($account->company_id === $company->id && $batch->bank_account_id === $account->id, 404);
+        $data = $r->validate(['understood' => 'accepted', 'confirmation' => 'required|in:UNDO']);
+        $service->undo($company, $batch, $r->user(), $data['confirmation']);
+
+        return redirect()->route('banking.imports', [$country, $company, $account])->with('success', 'Unmatched statement evidence from this import was removed.');
+    }
+
+    public function deleteImportAttempt(Request $r, string $country, Company $company, BankAccount $account, BankStatementImport $batch, BankStatementImportUndoService $service)
+    {
+        $company = $this->company($r, $country, $company);
+        abort_unless($account->company_id === $company->id && $batch->bank_account_id === $account->id, 404);
+        $service->deleteAttempt($company, $batch, $r->user());
+
+        return redirect()->route('banking.imports', [$country, $company, $account])->with('success', 'Empty statement import attempt removed.');
     }
 
     public function matching(Request $r, string $country, Company $company, BankAccount $account, BankingService $s)

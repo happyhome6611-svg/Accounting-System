@@ -10,7 +10,7 @@ class ImportRow extends Model
 
     protected function casts(): array
     {
-        return ['raw_values' => 'array', 'mapped_values' => 'array', 'warnings' => 'array', 'errors' => 'array'];
+        return ['raw_values' => 'array', 'mapped_values' => 'array', 'warnings' => 'array', 'errors' => 'array', 'undone_at' => 'datetime'];
     }
 
     public function batch()

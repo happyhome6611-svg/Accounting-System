@@ -6,12 +6,14 @@ use App\ImportExport\ExportService;
 use App\ImportExport\HeaderMapper;
 use App\ImportExport\ImportAdapterRegistry;
 use App\ImportExport\ImportService;
+use App\ImportExport\ImportUndoService;
 use App\Models\Company;
 use App\Models\EntityImportBatch;
 use App\Models\ImportBatch;
 use App\Models\ImportProfile;
 use App\Services\CountryJurisdictionService;
 use App\Services\EntityImportService;
+use App\Services\EntityImportUndoService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -29,7 +31,7 @@ class ImportExportController extends Controller
     {
         $country = $jurisdictions->country($country);
 
-        return view('import-export.country', ['country' => $country, 'companies' => $jurisdictions->entities($request->user(), $country)]);
+        return view('import-export.country', ['country' => $country, 'companies' => $jurisdictions->entities($request->user(), $country), 'entityBatches' => EntityImportBatch::where('country_id', $country->id)->where('uploaded_by', $request->user()->id)->with(['uploader', 'resultCompany'])->latest()->get()]);
     }
 
     public function entityImportCreate(Request $request, string $country, CountryJurisdictionService $jurisdictions)
@@ -86,6 +88,33 @@ class ImportExportController extends Controller
         return back()->with('success', 'Accounting Entity successfully imported.');
     }
 
+    public function entityImportUndoShow(Request $request, string $country, EntityImportBatch $batch, CountryJurisdictionService $jurisdictions, EntityImportUndoService $service)
+    {
+        $country = $jurisdictions->country($country);
+        abort_unless($batch->country_id === $country->id, 404);
+
+        return view('import-export.entity-undo', ['country' => $country, 'batch' => $batch->load(['uploader', 'resultCompany']), 'analysis' => $service->analysis($batch, $request->user())]);
+    }
+
+    public function entityImportUndo(Request $request, string $country, EntityImportBatch $batch, CountryJurisdictionService $jurisdictions, EntityImportUndoService $service)
+    {
+        $country = $jurisdictions->country($country);
+        abort_unless($batch->country_id === $country->id, 404);
+        $data = $request->validate(['understood' => 'accepted', 'confirmation' => 'required|in:UNDO']);
+        $service->undo($batch, $request->user(), $data['confirmation']);
+
+        return redirect()->route('import-export.country', $country->code)->with('success', 'Imported Accounting Entity successfully undone.');
+    }
+
+    public function entityImportDeleteAttempt(Request $request, string $country, EntityImportBatch $batch, CountryJurisdictionService $jurisdictions, EntityImportUndoService $service)
+    {
+        $country = $jurisdictions->country($country);
+        abort_unless($batch->country_id === $country->id, 404);
+        $service->deleteAttempt($batch, $request->user());
+
+        return redirect()->route('import-export.country', $country->code)->with('success', 'Empty Accounting Entity import attempt removed.');
+    }
+
     public function workspace(Request $request, string $country, Company $company, ImportAdapterRegistry $imports, ExportService $exports)
     {
         $company = $this->context($request, $country, $company);
@@ -116,7 +145,32 @@ class ImportExportController extends Controller
         $adapter = $registry->get($batch->data_type);
         $profiles = $company->importProfiles()->where('data_type', $batch->data_type)->get()->filter(fn ($profile) => $mapper->compatible($profile->source_headers, $batch->source_headers));
 
-        return view('import-export.batch', ['company' => $company, 'batch' => $batch->load(['rows', 'uploader']), 'fields' => $adapter->fields(), 'profiles' => $profiles]);
+        return view('import-export.batch', ['company' => $company, 'batch' => $batch->load(['rows', 'uploader']), 'fields' => $adapter->fields(), 'profiles' => $profiles, 'originalBatch' => $batch->originalSuccessfulBatch()]);
+    }
+
+    public function undoShow(Request $request, string $country, Company $company, ImportBatch $batch, ImportUndoService $service)
+    {
+        $company = $this->context($request, $country, $company);
+        $this->batch($company, $batch);
+
+        return view('import-export.undo', ['company' => $company, 'batch' => $batch->load('uploader'), 'analysis' => $service->analysis($company, $batch, $request->user())]);
+    }
+
+    public function undo(Request $request, string $country, Company $company, ImportBatch $batch, ImportUndoService $service)
+    {
+        $company = $this->context($request, $country, $company);
+        $data = $request->validate(['understood' => 'accepted', 'confirmation' => 'required|in:UNDO', 'reversal_date' => 'nullable|date']);
+        $service->undo($company, $batch, $request->user(), $data['confirmation'], $data['reversal_date'] ?? null);
+
+        return redirect()->route('import-export.batches.show', [$company->country->code, $company, $batch])->with('success', 'Import successfully undone. Historical audit evidence has been preserved.');
+    }
+
+    public function deleteAttempt(Request $request, string $country, Company $company, ImportBatch $batch, ImportUndoService $service)
+    {
+        $company = $this->context($request, $country, $company);
+        $service->deleteAttempt($company, $batch, $request->user());
+
+        return redirect()->route('import-export.workspace', [$company->country->code, $company])->with('success', 'Empty import attempt removed from history. Its audit event was preserved.');
     }
 
     public function worksheet(Request $request, string $country, Company $company, ImportBatch $batch, ImportService $service)

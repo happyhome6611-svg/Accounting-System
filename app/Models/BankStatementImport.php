@@ -10,7 +10,7 @@ class BankStatementImport extends Model
 
     protected function casts(): array
     {
-        return ['imported_at' => 'datetime'];
+        return ['undo_summary' => 'array', 'imported_at' => 'datetime', 'undone_at' => 'datetime'];
     }
 
     public function rows()

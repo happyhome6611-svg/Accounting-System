@@ -32,6 +32,7 @@
 @endif
 
 @if($batch->total_rows)
+<div class="card mb-3"><div class="card-header fw-semibold">Import Summary</div><div class="card-body"><p class="mb-1">Documents detected: {{ $batch->documentCount() ?? $batch->total_rows }} · Lines: {{ $batch->total_rows }}</p><p class="mb-0">Created: {{ $batch->importedDocumentCount() ?? $batch->imported_rows }} {{ $batch->documentField() ? 'documents' : 'records' }} / {{ $batch->imported_rows }} lines · Duplicates: {{ $batch->duplicate_rows }} · Failed: {{ $batch->failed_rows + $batch->invalid_rows }}</p>@if($originalBatch)<p class="mt-2 mb-0">Original successful import: <a href="{{ route('import-export.batches.show', [$company->country->code, $company, $originalBatch]) }}">Batch #{{ $originalBatch->id }}</a></p>@endif</div></div>
 <div class="row g-2 mb-3">@foreach(['Total' => $batch->total_rows, 'Valid' => $batch->valid_rows, 'Warnings' => $batch->warning_rows, 'Errors' => $batch->invalid_rows, 'Duplicates' => $batch->duplicate_rows, 'Imported' => $batch->imported_rows, 'Failed' => $batch->failed_rows] as $label => $count)<div class="col"><div class="card card-body text-center"><strong>{{ $count }}</strong><small>{{ $label }}</small></div></div>@endforeach</div>
 @if($batch->documentField())
 <div class="alert alert-info">{{ $batch->data_type === 'sales_invoices' ? 'Sales invoices' : 'Supplier bills' }}: {{ $batch->documentCount() }} documents / {{ $batch->total_rows }} lines. Imported: {{ $batch->importedDocumentCount() }} documents / {{ $batch->imported_rows }} lines.</div>
@@ -58,6 +59,11 @@
 @endif
 
 <div class="d-flex flex-wrap gap-2 mt-3">
+@if($batch->undo_status !== 'undone' && ($batch->hasCreatedRecords() || $batch->data_type === 'opening_balances' && $batch->rows()->whereNull('undone_at')->exists()))
+<a class="btn btn-outline-danger" href="{{ route('import-export.batches.undo.show', [$company->country->code, $company, $batch]) }}">Undo Import</a>
+@elseif($batch->undo_status !== 'undone' && in_array($batch->status, ['completed', 'completed_with_errors', 'failed', 'cancelled']))
+<form method="post" action="{{ route('import-export.batches.delete-attempt', [$company->country->code, $company, $batch]) }}" onsubmit="return confirm('Delete this zero-record import attempt?')">@csrf @method('DELETE')<button class="btn btn-outline-danger">Delete Import Attempt</button></form>
+@endif
 @if($batch->status === 'ready' && $batch->data_type !== 'opening_balances')
 <form method="post" action="{{ route('import-export.batches.confirm', [$company->country->code, $company, $batch]) }}" onsubmit="return confirm('Confirm this import? Valid non-duplicate rows will create production records.')">@csrf<button class="btn btn-success">Confirm Import</button></form>
 <a class="btn btn-outline-primary" href="{{ route('import-export.batches.show', [$company->country->code, $company, $batch, 'change_mapping' => 1]) }}">Change Mapping</a>

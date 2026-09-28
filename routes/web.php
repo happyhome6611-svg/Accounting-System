@@ -143,6 +143,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/banking/{country}/entities/{company}/accounts/{account}/imports', [BankingController::class, 'imports'])->name('banking.imports');
     Route::post('/banking/{country}/entities/{company}/accounts/{account}/imports/preview', [BankingController::class, 'preview'])->name('banking.imports.preview');
     Route::post('/banking/{country}/entities/{company}/accounts/{account}/imports', [BankingController::class, 'confirmImport'])->name('banking.imports.confirm');
+    Route::get('/banking/{country}/entities/{company}/accounts/{account}/imports/{batch}/undo', [BankingController::class, 'undoImportShow'])->name('banking.imports.undo.show');
+    Route::post('/banking/{country}/entities/{company}/accounts/{account}/imports/{batch}/undo', [BankingController::class, 'undoImport'])->name('banking.imports.undo');
+    Route::delete('/banking/{country}/entities/{company}/accounts/{account}/imports/{batch}', [BankingController::class, 'deleteImportAttempt'])->name('banking.imports.delete-attempt');
     Route::get('/banking/{country}/entities/{company}/accounts/{account}/matching', [BankingController::class, 'matching'])->name('banking.matching');
     Route::post('/banking/{country}/entities/{company}/accounts/{account}/matching/{row}', [BankingController::class, 'match'])->name('banking.match');
     Route::post('/banking/{country}/entities/{company}/accounts/{account}/matching/{row}/create', [BankingController::class, 'createFromStatement'])->name('banking.match.create');
@@ -179,10 +182,16 @@ Route::middleware('auth')->group(function () {
     Route::post('/import-export/{country}/entity-imports/{batch}/worksheet', [ImportExportController::class, 'entityImportWorksheet'])->name('import-export.entity-imports.worksheet');
     Route::post('/import-export/{country}/entity-imports/{batch}/validate', [ImportExportController::class, 'entityImportValidate'])->name('import-export.entity-imports.validate');
     Route::post('/import-export/{country}/entity-imports/{batch}/confirm', [ImportExportController::class, 'entityImportConfirm'])->name('import-export.entity-imports.confirm');
+    Route::get('/import-export/{country}/entity-imports/{batch}/undo', [ImportExportController::class, 'entityImportUndoShow'])->name('import-export.entity-imports.undo.show');
+    Route::post('/import-export/{country}/entity-imports/{batch}/undo', [ImportExportController::class, 'entityImportUndo'])->name('import-export.entity-imports.undo');
+    Route::delete('/import-export/{country}/entity-imports/{batch}', [ImportExportController::class, 'entityImportDeleteAttempt'])->name('import-export.entity-imports.delete-attempt');
     Route::get('/import-export/{country}/entities/{company}', [ImportExportController::class, 'workspace'])->name('import-export.workspace');
     Route::get('/import-export/{country}/entities/{company}/imports/create', [ImportExportController::class, 'create'])->name('import-export.imports.create');
     Route::post('/import-export/{country}/entities/{company}/imports', [ImportExportController::class, 'upload'])->name('import-export.imports.upload');
     Route::get('/import-export/{country}/entities/{company}/imports/{batch}', [ImportExportController::class, 'show'])->name('import-export.batches.show');
+    Route::get('/import-export/{country}/entities/{company}/imports/{batch}/undo', [ImportExportController::class, 'undoShow'])->name('import-export.batches.undo.show');
+    Route::post('/import-export/{country}/entities/{company}/imports/{batch}/undo', [ImportExportController::class, 'undo'])->name('import-export.batches.undo');
+    Route::delete('/import-export/{country}/entities/{company}/imports/{batch}', [ImportExportController::class, 'deleteAttempt'])->name('import-export.batches.delete-attempt');
     Route::post('/import-export/{country}/entities/{company}/imports/{batch}/worksheet', [ImportExportController::class, 'worksheet'])->name('import-export.batches.worksheet');
     Route::post('/import-export/{country}/entities/{company}/imports/{batch}/validate', [ImportExportController::class, 'validateBatch'])->name('import-export.batches.validate');
     Route::post('/import-export/{country}/entities/{company}/imports/{batch}/confirm', [ImportExportController::class, 'confirm'])->name('import-export.batches.confirm');
