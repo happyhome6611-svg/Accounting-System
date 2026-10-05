@@ -50,14 +50,18 @@ The command is repeatable and leaves existing matching setup intact. It stops if
 8. Click **Generate Periods** for `DEMO-NZ-001`. Tax Periods are not required merely to validate a draft import, but an open period covering the transaction date is required before posting.
 9. Import `04_customers.csv` as Customers, then `05_suppliers.csv` as Suppliers.
 10. Import `06_products_services.csv` as Products / Services. Its `STANDARD` and `ZERO` defaults now resolve against the entity tax configuration.
-11. Import `07_sales_invoices.csv` as Sales Invoices in Draft mode. Review and post through Sales.
-12. Import `09_supplier_bills.csv` as Supplier Bills in Draft mode. Review and post through Purchases.
-13. Enter `08_customer_receipts_reference.csv` through **Sales → Customer Receipts** after the relevant invoices are posted. It is not directly importable.
-14. Enter `10_supplier_payments_reference.csv` through **Purchases → Supplier Payments** after the relevant bills are posted. It is not directly importable.
-15. Import `11_manual_journals.csv` as Manual Journals, review, then post.
-16. Create an active NZD bank account linked to account 1010, then import `12_bank_statement.csv` through **Banking → Bank Accounts → Import Statement** as evidence. Do not duplicate transactions already created elsewhere.
-17. Import `13_opening_balances.csv` only for balanced staging validation. v0.8 does not post opening-balance batches.
-18. Compare reports with `expected_control_totals.md` after completing the applicable workflows.
+11. Import `07a_sales_quotations.csv` as Sales Quotations at **Import & Export → New Import**. These are draft, non-posting documents.
+12. Import `07b_sales_orders.csv` as Sales Orders at **Import & Export → New Import**. The CSV import does not fabricate a quotation-to-order link; use **Sales → Quotations → Convert** when testing that relationship.
+13. Import `07_sales_invoices.csv` as Sales Invoices in Draft mode. Review and post through **Sales → Sales Invoices**.
+14. Enter `08_customer_receipts_reference.csv` through **Sales → Customer Receipts** after the relevant invoices are posted. It remains an existing application workflow because receipts must use allocation, lock-date, and posting controls.
+15. Import `09a_purchase_orders.csv` as Purchase Orders at **Import & Export → New Import**. These are draft, non-posting documents.
+16. Import `09_supplier_bills.csv` as Supplier Bills in Draft mode. Review and post through **Purchases → Supplier Bills**.
+17. Enter `10a_supplier_credits_reference.csv` through **Purchases → Supplier Credits** after the linked bills are posted. It remains an existing application workflow so the established reversal and allocation controls are used.
+18. Enter `10_supplier_payments_reference.csv` through **Purchases → Supplier Payments** after the relevant bills are posted. It remains an existing application workflow because payments must use allocation, lock-date, and posting controls.
+19. Import `11_manual_journals.csv` as Manual Journals, review, then post.
+20. Create an active NZD bank account linked to account 1010, then import `12_bank_statement.csv` through **Banking → Bank Accounts → Import Statement** as evidence. Do not duplicate transactions already created elsewhere.
+21. Import `13_opening_balances.csv` only for balanced staging validation. v0.8 does not post opening-balance batches.
+22. Compare reports with `expected_control_totals.md` after completing the applicable workflows.
 
 ## File manifest
 
@@ -71,11 +75,15 @@ The command is repeatable and leaves existing matching setup intact. It stops if
 | 04_customers.csv | Create 50 customers | Yes | Entity Import & Export → New Import → Customers |
 | 05_suppliers.csv | Create 25 suppliers | Yes | Entity Import & Export → New Import → Suppliers |
 | 06_products_services.csv | Create 40 products/services after tax setup | Yes | Entity Import & Export → New Import → Products / Services |
+| 07a_sales_quotations.csv | Create 3 grouped draft quotations / 5 lines | Yes | Entity Import & Export → New Import → Sales Quotations |
+| 07b_sales_orders.csv | Create 3 grouped draft sales orders / 5 lines | Yes | Entity Import & Export → New Import → Sales Orders |
 | 07_sales_invoices.csv | Create 360 grouped draft invoices | Yes | Entity Import & Export → New Import → Sales Invoices |
 | 07_sales_invoice_summary_reference.csv | Invoice control totals | No | Reference only after Sales Invoice import |
 | 08_customer_receipts_reference.csv | Values for 240 customer receipts | No | Sales → Customer Receipts |
 | 09_supplier_bills.csv | Create 190 grouped draft bills | Yes | Entity Import & Export → New Import → Supplier Bills |
 | 09_supplier_bill_summary_reference.csv | Supplier Bill control totals | No | Reference only after Supplier Bill import |
+| 09a_purchase_orders.csv | Create 3 grouped draft purchase orders / 5 lines | Yes | Entity Import & Export → New Import → Purchase Orders |
+| 10a_supplier_credits_reference.csv | Values for 2 bill-linked supplier credits | No | Purchases → Supplier Credits |
 | 10_supplier_payments_reference.csv | Values for 140 supplier payments | No | Purchases → Supplier Payments |
 | 11_manual_journals.csv | Create 40 balanced draft journals | Yes | Entity Import & Export → New Import → Manual Journals |
 | 12_bank_statement.csv | Import 542 statement-evidence rows | Yes | Banking → Bank Accounts → Import Statement |
@@ -92,11 +100,15 @@ The command is repeatable and leaves existing matching setup intact. It stops if
 | 04_customers.csv | Company and account 1100 exist | Create 50 active customers | Direct import |
 | 05_suppliers.csv | Company and account 2000 exist | Create 25 active suppliers | Direct import |
 | 06_products_services.csv | Accounts and generic tax codes exist | Create 24 products and 16 services | Direct import |
+| 07a_sales_quotations.csv | Customers, items, accounts, and branches exist | Create 3 draft quotations / 5 lines without ledger entries | Direct import |
+| 07b_sales_orders.csv | Customers, items, accounts, and branches exist | Create 3 draft sales orders / 5 lines without ledger entries | Direct import |
 | 07_sales_invoices.csv | Customers, items, accounts, branches, tax codes, and open FY exist | Stage 360 draft invoices containing 900 lines | Direct import |
 | 07_sales_invoice_summary_reference.csv | Sales invoice import completed | Verify invoice-level net, tax, gross, dates, and line counts | Reference only |
 | 08_customer_receipts_reference.csv | Relevant invoices are posted and bank account exists | Enter 240 full/partial allocations through Sales; leave the remainder outstanding | Manual workflow |
 | 09_supplier_bills.csv | Suppliers, items, accounts, branches, tax codes, and open FY exist | Stage 190 draft bills containing 381 lines | Direct import |
 | 09_supplier_bill_summary_reference.csv | Supplier bill import completed | Verify bill-level net, tax, gross, dates, and line counts | Reference only |
+| 09a_purchase_orders.csv | Suppliers, items, accounts, and branches exist | Create 3 draft purchase orders / 5 lines without ledger entries | Direct import |
+| 10a_supplier_credits_reference.csv | Linked Supplier Bill is posted | Enter 2 credits through the controlled Purchases workflow | Existing application workflow |
 | 10_supplier_payments_reference.csv | Relevant bills are posted and bank account exists | Enter 140 full/partial allocations through Purchases; leave the remainder outstanding | Manual workflow |
 | 11_manual_journals.csv | Accounts, branches, and open FY exist | Stage 40 balanced journals containing 80 lines | Direct import |
 | 12_bank_statement.csv | NZD bank account linked to account 1010 exists | Import 542 evidence rows; match existing entries and create only the 150 BANK entries | Direct evidence import |
@@ -108,9 +120,13 @@ The command is repeatable and leaves existing matching setup intact. It stops if
 - Customers: 50
 - Suppliers: 25
 - Products / Services: 40
+- Sales quotations: 3 documents / 5 lines
+- Sales orders: 3 documents / 5 lines
 - Sales invoices: 360 documents / 900 lines
 - Customer receipts: 240
+- Purchase orders: 3 documents / 5 lines
 - Supplier bills: 190 documents / 381 lines
+- Supplier credits: 2 reference workflow rows
 - Supplier payments: 140
 - Manual journals: 40 journals / 80 lines
 - Bank statement: 542 evidence rows

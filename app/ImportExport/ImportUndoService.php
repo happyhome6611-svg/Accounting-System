@@ -9,7 +9,10 @@ use App\Models\ImportBatch;
 use App\Models\Item;
 use App\Models\JournalEntry;
 use App\Models\OpeningBalanceStaging;
+use App\Models\PurchaseOrder;
 use App\Models\SalesInvoice;
+use App\Models\SalesOrder;
+use App\Models\SalesQuotation;
 use App\Models\Supplier;
 use App\Models\SupplierBill;
 use App\Models\User;
@@ -140,6 +143,9 @@ final class ImportUndoService
             Item::class => [...$this->items->blockers($model), ...collect(['purchase_order_lines' => 'purchase orders', 'supplier_bill_lines' => 'supplier bills', 'supplier_credit_lines' => 'supplier credits'])->filter(fn ($label, $table) => DB::table($table)->where('item_id', $model->id)->exists())->values()->all()],
             Account::class => $this->accountBlockers($model),
             SalesInvoice::class => $model->status === 'draft' && ! $model->allocations()->exists() && ! $model->creditNotes()->exists() ? [] : ['Posted or dependent invoices require an explicit correction workflow and cannot be hard-deleted.'],
+            SalesQuotation::class => $model->status === 'draft' && ! $model->convertedOrder()->exists() ? [] : ['Converted quotations cannot be removed.'],
+            SalesOrder::class => $model->status === 'draft' && ! $model->convertedInvoice()->exists() ? [] : ['Converted sales orders cannot be removed.'],
+            PurchaseOrder::class => $model->status === 'draft' && ! $model->bill()->exists() ? [] : ['Billed purchase orders cannot be removed.'],
             SupplierBill::class => $model->status === 'draft' && ! $model->allocations()->exists() && ! $model->credits()->exists() ? [] : ['Posted or dependent bills require an explicit correction workflow and cannot be hard-deleted.'],
             OpeningBalanceStaging::class => $model->status === 'staged' && ! $model->converted_journal_id ? [] : ['Converted Opening Balances cannot be removed from staging.'],
             default => [],
@@ -165,6 +171,8 @@ final class ImportUndoService
             Item::class => tap(null, fn () => $this->items->delete($company, $model, $user, $model->name)),
             Account::class => tap(null, fn () => $model->forceDelete()),
             SalesInvoice::class => tap(null, fn () => $this->sales->delete($company, $model, $user)),
+            SalesQuotation::class, SalesOrder::class => tap(null, fn () => $this->sales->delete($company, $model, $user)),
+            PurchaseOrder::class => tap(null, fn () => $this->purchases->deleteDraft($company, $model, $user)),
             SupplierBill::class => tap(null, fn () => $this->purchases->deleteDraft($company, $model, $user)),
             JournalEntry::class => $model->status === 'draft'
                 ? tap(null, fn () => $this->journals->deleteDraft($model, $user))
@@ -185,6 +193,9 @@ final class ImportUndoService
             'products' => Item::class,
             'chart_of_accounts' => Account::class,
             'sales_invoices' => SalesInvoice::class,
+            'sales_quotations' => SalesQuotation::class,
+            'sales_orders' => SalesOrder::class,
+            'purchase_orders' => PurchaseOrder::class,
             'supplier_bills' => SupplierBill::class,
             'manual_journals' => JournalEntry::class,
             'opening_balances' => OpeningBalanceStaging::class,

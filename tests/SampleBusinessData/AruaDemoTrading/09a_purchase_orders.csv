@@ -1,0 +1,6 @@
+Purchase Order Source ID,Supplier Code,Order Date,Expected Date,Branch Code,Product / Service Code,Expense / Asset Account,Description,Quantity,Unit Price,Discount Amount
+PO-DEMO-001,SUP001,2025-04-03,2025-04-17,AKL,PROD001,5010,Opening product replenishment,10,20.25,0.00
+PO-DEMO-001,SUP001,2025-04-03,2025-04-17,AKL,PROD007,5010,Zero-rated product replenishment,5,31.50,7.50
+PO-DEMO-002,SUP002,2025-05-08,2025-05-22,WLG,SERV004,6110,Contract support,4,56.00,4.00
+PO-DEMO-002,SUP002,2025-05-08,2025-05-22,WLG,PROD004,5010,Branch supplies,8,48.75,10.00
+PO-DEMO-003,SUP003,2025-06-12,2025-06-26,AKL,SERV008,6110,Zero-rated advisory purchase,2,91.00,2.00

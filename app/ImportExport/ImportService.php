@@ -158,7 +158,7 @@ final class ImportService
         $failed = 0;
         $skipped = $batch->rows()->count() - $rows->count();
         $groupField = match ($batch->data_type) {
-            'sales_invoices' => 'invoice_ref', 'supplier_bills' => 'bill_ref', 'manual_journals' => 'journal_ref', 'opening_balances' => 'opening_ref', default => null
+            'sales_quotations' => 'quotation_ref', 'sales_orders', 'purchase_orders' => 'order_ref', 'sales_invoices' => 'invoice_ref', 'supplier_bills' => 'bill_ref', 'manual_journals' => 'journal_ref', 'opening_balances' => 'opening_ref', default => null
         };
         $groups = $groupField ? $rows->groupBy(fn ($row) => $row->mapped_values[$groupField]) : $rows->mapWithKeys(fn ($row) => [$row->id => collect([$row])]);
         foreach ($groups as $group) {
@@ -235,7 +235,7 @@ final class ImportService
     private function validateGroups(ImportBatch $batch): void
     {
         $groupField = match ($batch->data_type) {
-            'sales_invoices' => 'invoice_ref', 'supplier_bills' => 'bill_ref', 'manual_journals' => 'journal_ref', 'opening_balances' => 'opening_ref', default => null
+            'sales_quotations' => 'quotation_ref', 'sales_orders', 'purchase_orders' => 'order_ref', 'sales_invoices' => 'invoice_ref', 'supplier_bills' => 'bill_ref', 'manual_journals' => 'journal_ref', 'opening_balances' => 'opening_ref', default => null
         };
         if (! $groupField) {
             return;
@@ -250,7 +250,13 @@ final class ImportService
                     $errors[] = 'Grouped document is unbalanced: total Debit must equal total Credit.';
                 }
             } else {
-                $keys = $batch->data_type === 'sales_invoices' ? ['customer', 'invoice_date', 'due_date', 'branch'] : ['supplier', 'bill_date', 'due_date', 'branch'];
+                $keys = match ($batch->data_type) {
+                    'sales_quotations' => ['customer', 'quotation_date', 'expiry_date', 'branch'],
+                    'sales_orders' => ['customer', 'order_date', 'branch'],
+                    'sales_invoices' => ['customer', 'invoice_date', 'due_date', 'branch'],
+                    'purchase_orders' => ['supplier', 'order_date', 'expected_date', 'branch'],
+                    default => ['supplier', 'bill_date', 'due_date', 'branch'],
+                };
                 foreach ($keys as $key) {
                     if ($values->pluck($key)->unique()->count() > 1) {
                         $errors[] = 'All rows in one source document must use the same '.$key.'.';

@@ -136,6 +136,26 @@ const post = (debits, credits) => {
   for (const [code, amount] of credits) { assert(ledger.has(code), `Unknown credit account ${code}`); ledger.get(code).credit += amount; }
 };
 
+const quotationRows = [
+  ["Q-DEMO-001", "CUST001", "2025-04-10", "2025-05-10", "AKL", "PROD002", "4010", "Initial product quotation", 2, "62.50", "0.00"],
+  ["Q-DEMO-001", "CUST001", "2025-04-10", "2025-05-10", "AKL", "PROD006", "4030", "Zero-rated delivery option", 1, "80.00", "5.00"],
+  ["Q-DEMO-002", "CUST002", "2025-05-05", "2025-06-04", "WLG", "SERV002", "4020", "Implementation services", 3, "110.00", "15.00"],
+  ["Q-DEMO-002", "CUST002", "2025-05-05", "2025-06-04", "WLG", "PROD003", "4010", "Supporting product", 2, "80.00", "0.00"],
+  ["Q-DEMO-003", "CUST003", "2025-06-01", "2025-07-01", "AKL", "SERV008", "4020", "Zero-rated advisory service", 2, "260.00", "20.00"],
+];
+writeCsv("07a_sales_quotations.csv", ["Quotation Source ID", "Customer Code", "Quotation Date", "Expiry Date", "Branch Code", "Product / Service Code", "Revenue Account", "Description", "Quantity", "Unit Price", "Discount Amount"], quotationRows,
+  { importable: true, type: "sales_quotations", purpose: "Three grouped draft quotations demonstrating multiple lines, branches, and discounts" });
+
+const salesOrderRows = [
+  ["SO-DEMO-001", "CUST001", "2025-04-15", "AKL", "PROD002", "4010", "Accepted product order", 2, "62.50", "0.00"],
+  ["SO-DEMO-001", "CUST001", "2025-04-15", "AKL", "PROD006", "4030", "Accepted delivery order", 1, "80.00", "5.00"],
+  ["SO-DEMO-002", "CUST002", "2025-05-12", "WLG", "SERV002", "4020", "Implementation order", 3, "110.00", "15.00"],
+  ["SO-DEMO-002", "CUST002", "2025-05-12", "WLG", "PROD003", "4010", "Supporting product order", 2, "80.00", "0.00"],
+  ["SO-DEMO-003", "CUST003", "2025-06-08", "AKL", "SERV008", "4020", "Advisory order", 2, "260.00", "20.00"],
+];
+writeCsv("07b_sales_orders.csv", ["Sales Order Source ID", "Customer Code", "Order Date", "Branch Code", "Product / Service Code", "Revenue Account", "Description", "Quantity", "Unit Price", "Discount Amount"], salesOrderRows,
+  { importable: true, type: "sales_orders", purpose: "Three grouped draft sales orders aligned with the demonstration quotation story" });
+
 const salesHeaders = ["Invoice Number / Source ID", "Customer Code", "Invoice Date", "Due Date", "Branch Code", "Product / Service Code", "Revenue Account", "Description", "Quantity", "Unit Price", "Discount Amount", "Tax Code", "Tax Inclusive", "Source Tax Amount"];
 const salesRows = [];
 const invoiceSummaries = [];
@@ -215,6 +235,23 @@ for (let i = 1; i <= 190; i++) {
 writeCsv("09_supplier_bills.csv", billHeaders, billRows, { importable: true, type: "supplier_bills", purpose: "One hundred ninety grouped supplier bills" });
 writeCsv("09_supplier_bill_summary_reference.csv", ["Bill Number", "Supplier Code", "Bill Date", "Due Date", "Branch Code", "Line Count", "Net", "Tax", "Gross"], billSummaries,
   { importable: false, purpose: "Reference totals for validating imported grouped bills" });
+
+const purchaseOrderRows = [
+  ["PO-DEMO-001", "SUP001", "2025-04-03", "2025-04-17", "AKL", "PROD001", "5010", "Opening product replenishment", 10, "20.25", "0.00"],
+  ["PO-DEMO-001", "SUP001", "2025-04-03", "2025-04-17", "AKL", "PROD007", "5010", "Zero-rated product replenishment", 5, "31.50", "7.50"],
+  ["PO-DEMO-002", "SUP002", "2025-05-08", "2025-05-22", "WLG", "SERV004", "6110", "Contract support", 4, "56.00", "4.00"],
+  ["PO-DEMO-002", "SUP002", "2025-05-08", "2025-05-22", "WLG", "PROD004", "5010", "Branch supplies", 8, "48.75", "10.00"],
+  ["PO-DEMO-003", "SUP003", "2025-06-12", "2025-06-26", "AKL", "SERV008", "6110", "Zero-rated advisory purchase", 2, "91.00", "2.00"],
+];
+writeCsv("09a_purchase_orders.csv", ["Purchase Order Source ID", "Supplier Code", "Order Date", "Expected Date", "Branch Code", "Product / Service Code", "Expense / Asset Account", "Description", "Quantity", "Unit Price", "Discount Amount"], purchaseOrderRows,
+  { importable: true, type: "purchase_orders", purpose: "Three grouped draft purchase orders demonstrating multiple lines, branches, and discounts" });
+
+const supplierCreditRows = [
+  ["SC-DEMO-001", "SUP004", "BILL0001", "2025-05-15", "AKL", "PROD010", "5010", "Returned damaged goods", "25.00", "STANDARD"],
+  ["SC-DEMO-002", "SUP013", "BILL0004", "2025-06-20", "WLG", "PROD013", "5010", "Zero-rated delivery correction", "18.00", "ZERO"],
+];
+writeCsv("10a_supplier_credits_reference.csv", ["Credit Reference", "Supplier Code", "Source Bill", "Credit Date", "Branch Code", "Product / Service Code", "Expense Account", "Description", "Net Amount", "Tax Code"], supplierCreditRows,
+  { importable: false, purpose: "REFERENCE DATA – enter through Purchases after the linked supplier bills are posted" });
 
 const paymentRows = [];
 let paymentTotal = 0;
@@ -384,10 +421,25 @@ const controls = [
   ["Expected Balance Sheet Assets", assets], ["Expected Balance Sheet Liabilities", liabilities], ["Expected Balance Sheet Equity Before Profit", equity],
 ];
 
-const totalMeaningfulRows = importedAccounts.length + customers.length + suppliers.length + items.length + salesRows.length + receiptRows.length + billRows.length + paymentRows.length + journalRows.length + statementRows.length + openingRows.length;
+const quotationTotal = quotationRows.reduce((sum, row) => sum + Math.round(Number(row[8]) * Number(row[9]) * 100) - Math.round(Number(row[10]) * 100), 0);
+const salesOrderTotal = salesOrderRows.reduce((sum, row) => sum + Math.round(Number(row[7]) * Number(row[8]) * 100) - Math.round(Number(row[9]) * 100), 0);
+const purchaseOrderTotal = purchaseOrderRows.reduce((sum, row) => sum + Math.round(Number(row[8]) * Number(row[9]) * 100) - Math.round(Number(row[10]) * 100), 0);
+const supplierCreditNet = supplierCreditRows.reduce((sum, row) => sum + Math.round(Number(row[8]) * 100), 0);
+const totalMeaningfulRows = importedAccounts.length + customers.length + suppliers.length + items.length + quotationRows.length + salesOrderRows.length + salesRows.length + receiptRows.length + purchaseOrderRows.length + billRows.length + supplierCreditRows.length + paymentRows.length + journalRows.length + statementRows.length + openingRows.length;
 const controlMarkdown = [
   "# Expected Control Totals", "", "All amounts are NZD. These controls describe the complete operational dataset after directly importable documents are posted and reference-only receipts, payments, and direct bank entries are entered through their existing Arua workflows. Bank statement rows are evidence and must not be posted twice.", "",
   "Opening balances are excluded from the operational totals because v0.8 supports balanced staging but not posting. The opening batch separately balances at NZD 97,000.00 debit and credit.", "",
+  "## Workflow document controls", "", "These non-posting document totals are separate from ledger controls. Supplier credits remain reference-only and therefore are not included in AP, tax, or Trial Balance controls until entered and posted through Purchases.", "",
+  "| Workflow | Documents | Lines / allocations | Net or allocated NZD |", "| --- | ---: | ---: | ---: |",
+  `| Sales Quotations | 3 | ${quotationRows.length} | ${money(quotationTotal)} |`,
+  `| Sales Orders | 3 | ${salesOrderRows.length} | ${money(salesOrderTotal)} |`,
+  `| Sales Invoices | ${invoiceSummaries.length} | ${salesRows.length} | ${money(salesNet)} |`,
+  `| Customer Receipts | ${receiptRows.length} | ${receiptRows.length} | ${money(receiptTotal)} |`,
+  `| Purchase Orders | 3 | ${purchaseOrderRows.length} | ${money(purchaseOrderTotal)} |`,
+  `| Supplier Bills | ${billSummaries.length} | ${billRows.length} | ${money(purchaseNet)} |`,
+  `| Supplier Credits (reference) | ${supplierCreditRows.length} | ${supplierCreditRows.length} | ${money(supplierCreditNet)} |`,
+  `| Supplier Payments | ${paymentRows.length} | ${paymentRows.length} | ${money(paymentTotal)} |`, "",
+  "## Posted accounting controls", "",
   "| Control | Expected NZD |", "| --- | ---: |", ...controls.map(([label, cents]) => `| ${label} | ${money(cents)} |`), "",
   `- Direct bank income included in P&L: NZD ${money(directBankIncome)}`,
   `- Direct bank expenses included in P&L: NZD ${money(directBankExpense)}`,
@@ -406,11 +458,15 @@ const usageRows = [
   ["04_customers.csv", "Company and account 1100 exist", "Create 50 active customers", "Direct import"],
   ["05_suppliers.csv", "Company and account 2000 exist", "Create 25 active suppliers", "Direct import"],
   ["06_products_services.csv", "Accounts and generic tax codes exist", "Create 24 products and 16 services", "Direct import"],
+  ["07a_sales_quotations.csv", "Customers, items, accounts, and branches exist", "Create 3 draft quotations containing 5 lines; no ledger posting", "Direct import"],
+  ["07b_sales_orders.csv", "Customers, items, accounts, and branches exist", "Create 3 draft sales orders containing 5 lines; no ledger posting", "Direct import"],
   ["07_sales_invoices.csv", "Customers, items, accounts, branches, tax codes, and open FY exist", "Stage 360 draft invoices containing 900 lines", "Direct import"],
   ["07_sales_invoice_summary_reference.csv", "Sales invoice import completed", "Verify invoice-level net, tax, gross, dates, and line counts", "Reference only"],
   ["08_customer_receipts_reference.csv", "Relevant invoices are posted and bank account exists", "Enter 240 full/partial allocations through Sales; leave the remainder outstanding", "Manual workflow"],
   ["09_supplier_bills.csv", "Suppliers, items, accounts, branches, tax codes, and open FY exist", "Stage 190 draft bills containing 381 lines", "Direct import"],
   ["09_supplier_bill_summary_reference.csv", "Supplier bill import completed", "Verify bill-level net, tax, gross, dates, and line counts", "Reference only"],
+  ["09a_purchase_orders.csv", "Suppliers, items, accounts, and branches exist", "Create 3 draft purchase orders containing 5 lines; no ledger posting", "Direct import"],
+  ["10a_supplier_credits_reference.csv", "Linked bill is posted", "Enter 2 credits through the existing controlled Purchases workflow", "Manual workflow"],
   ["10_supplier_payments_reference.csv", "Relevant bills are posted and bank account exists", "Enter 140 full/partial allocations through Purchases; leave the remainder outstanding", "Manual workflow"],
   ["11_manual_journals.csv", "Accounts, branches, and open FY exist", "Stage 40 balanced journals containing 80 lines", "Direct import"],
   ["12_bank_statement.csv", "NZD bank account linked to account 1010 exists", "Import 542 evidence rows; match existing entries and create only the 150 BANK entries", "Direct evidence import"],
@@ -450,7 +506,7 @@ files.set("expected_control_totals.md", { content: controlMarkdown, rows: [], he
 const validationReport = {
   status: "passed", generated_at: "2026-09-18", financial_year: { starts_on: fyStart, ends_on: fyEnd },
   checks: ["foreign references", "customer references", "supplier references", "product references", "account references", "branch references", "invoice arithmetic", "bill arithmetic", "receipt allocations", "supplier payment allocations", "tax arithmetic", "journal balancing", "duplicate document IDs", "date ranges", "bank-to-ledger reconciliation", "trial balance", "profit and loss", "balance sheet equation"],
-  counts: { imported_accounts: importedAccounts.length, customers: customers.length, suppliers: suppliers.length, items: items.length, sales_invoices: invoiceSummaries.length, sales_invoice_lines: salesRows.length, customer_receipts: receiptRows.length, supplier_bills: billSummaries.length, supplier_bill_lines: billRows.length, supplier_payments: paymentRows.length, manual_journals: 40, manual_journal_lines: journalRows.length, bank_statement_rows: statementRows.length, opening_balance_rows: openingRows.length },
+  counts: { imported_accounts: importedAccounts.length, customers: customers.length, suppliers: suppliers.length, items: items.length, sales_quotations: 3, sales_quotation_lines: quotationRows.length, sales_orders: 3, sales_order_lines: salesOrderRows.length, sales_invoices: invoiceSummaries.length, sales_invoice_lines: salesRows.length, customer_receipts: receiptRows.length, purchase_orders: 3, purchase_order_lines: purchaseOrderRows.length, supplier_bills: billSummaries.length, supplier_bill_lines: billRows.length, supplier_credits_reference: supplierCreditRows.length, supplier_payments: paymentRows.length, manual_journals: 40, manual_journal_lines: journalRows.length, bank_statement_rows: statementRows.length, opening_balance_rows: openingRows.length },
   controls: Object.fromEntries(controls.map(([label, cents]) => [label, money(cents)])),
 };
 files.set("validation_report.json", { content: JSON.stringify(validationReport, null, 2) + "\n", rows: [], headers: [], meta: { importable: false } });
@@ -463,9 +519,10 @@ summary.showGridLines = false;
 summary.getRange("A2").values = [["Arua Demo Trading Ltd: Sample Business Dataset"]];
 summary.getRange("A3:B6").values = [["Currency", "NZD"], ["Entity type", "Company"], ["Country", "New Zealand"], ["Financial year", "1 Apr 2025 to 31 Mar 2026"]];
 summary.getRange("A8:B8").values = [["Dataset count", "Value"]];
-summary.getRange("A9:B18").values = [
-  ["Customers", customers.length], ["Suppliers", suppliers.length], ["Products / Services", items.length], ["Sales invoices", invoiceSummaries.length], ["Sales invoice lines", salesRows.length],
-  ["Customer receipts", receiptRows.length], ["Supplier bills", billSummaries.length], ["Supplier bill lines", billRows.length], ["Supplier payments", paymentRows.length], ["Bank statement rows", statementRows.length],
+summary.getRange("A9:B24").values = [
+  ["Customers", customers.length], ["Suppliers", suppliers.length], ["Products / Services", items.length], ["Sales quotations", 3], ["Sales quotation lines", quotationRows.length],
+  ["Sales orders", 3], ["Sales order lines", salesOrderRows.length], ["Sales invoices", invoiceSummaries.length], ["Sales invoice lines", salesRows.length],
+  ["Customer receipts", receiptRows.length], ["Purchase orders", 3], ["Purchase order lines", purchaseOrderRows.length], ["Supplier bills", billSummaries.length], ["Supplier bill lines", billRows.length], ["Supplier credits (reference)", supplierCreditRows.length], ["Supplier payments", paymentRows.length],
 ];
 const controlSheet = workbook.worksheets.add("Controls");
 controlSheet.showGridLines = false;

@@ -4,6 +4,23 @@ All amounts are NZD. These controls describe the complete operational dataset af
 
 Opening balances are excluded from the operational totals because v0.8 supports balanced staging but not posting. The opening batch separately balances at NZD 97,000.00 debit and credit.
 
+## Workflow document controls
+
+These non-posting document totals are separate from ledger controls. Supplier credits remain reference-only and therefore are not included in AP, tax, or Trial Balance controls until entered and posted through Purchases.
+
+| Workflow | Documents | Lines / allocations | Net or allocated NZD |
+| --- | ---: | ---: | ---: |
+| Sales Quotations | 3 | 5 | 1175.00 |
+| Sales Orders | 3 | 5 | 1175.00 |
+| Sales Invoices | 360 | 900 | 369458.83 |
+| Customer Receipts | 240 | 240 | 244651.09 |
+| Purchase Orders | 3 | 5 | 1132.50 |
+| Supplier Bills | 190 | 381 | 56425.83 |
+| Supplier Credits (reference) | 2 | 2 | 43.00 |
+| Supplier Payments | 140 | 140 | 39764.08 |
+
+## Posted accounting controls
+
 | Control | Expected NZD |
 | --- | ---: |
 | Total Sales Net | 369458.83 |

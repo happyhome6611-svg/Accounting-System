@@ -428,7 +428,7 @@ class ImportExportFoundationTest extends TestCase
     public function test_parser_keeps_headers_separate_from_csv_and_xlsx_records_for_supported_imports(): void
     {
         $parser = app(FileParser::class);
-        foreach (['04_customers.csv', '05_suppliers.csv', '06_products_services.csv', '07_sales_invoices.csv', '09_supplier_bills.csv', '11_manual_journals.csv'] as $filename) {
+        foreach (['04_customers.csv', '05_suppliers.csv', '06_products_services.csv', '07a_sales_quotations.csv', '07b_sales_orders.csv', '07_sales_invoices.csv', '09a_purchase_orders.csv', '09_supplier_bills.csv', '11_manual_journals.csv'] as $filename) {
             $parsed = $parser->parse(base_path('tests/SampleBusinessData/AruaDemoTrading/'.$filename), 'csv');
             $this->assertNotEmpty($parsed['headers']);
             $this->assertNotEmpty($parsed['rows']);
@@ -528,6 +528,24 @@ class ImportExportFoundationTest extends TestCase
         $this->assertSame(40, $company->items()->count());
 
         $journalCount = $company->journals()->count();
+        foreach ([
+            ['sales_quotations', '07a_sales_quotations.csv', 'salesQuotations'],
+            ['sales_orders', '07b_sales_orders.csv', 'salesOrders'],
+            ['purchase_orders', '09a_purchase_orders.csv', 'purchaseOrders'],
+        ] as [$type, $filename, $relation]) {
+            $batch = $this->sampleBatch($company, $type, $filename);
+            $this->assertSame('ready', $batch->status);
+            $this->assertSame(5, $batch->total_rows);
+            $this->assertSame(3, $batch->documentCount());
+            $this->assertSame(0, $batch->invalid_rows);
+            $this->assertSame(0, $batch->duplicate_rows);
+            $batch = app(ImportService::class)->confirm($company, $batch, $this->user);
+            $this->assertSame(5, $batch->imported_rows);
+            $this->assertSame(3, $batch->importedDocumentCount());
+            $this->assertSame(3, $company->{$relation}()->count());
+        }
+        $this->assertSame($journalCount, $company->journals()->count());
+
         $opening = $this->sampleBatch($company, 'opening_balances', '13_opening_balances.csv');
         $this->assertSame('ready', $opening->status);
         $this->assertSame(9, $opening->total_rows);
@@ -576,6 +594,8 @@ class ImportExportFoundationTest extends TestCase
         $sales = app(ImportService::class)->confirm($company, $sales, $this->user);
         $this->assertSame(900, $sales->imported_rows);
         $this->assertSame(360, $sales->importedDocumentCount());
+        $this->actingAs($this->user)->get(route('sales.transactions.index', [$company, 'invoices']))
+            ->assertOk()->assertSee('360 documents')->assertSee('INV0001');
         foreach (['INV0050' => ['1003.2500', '150.4875', '1153.7375'], 'INV0051' => ['827.5000', '124.1250', '951.6250']] as $ref => [$net, $taxAmount, $gross]) {
             $invoice = $company->salesInvoices()->where('customer_reference', $ref)->firstOrFail();
             $this->assertSame($net, $invoice->subtotal);
@@ -602,6 +622,8 @@ class ImportExportFoundationTest extends TestCase
         $bills = app(ImportService::class)->confirm($company, $bills, $this->user);
         $this->assertSame(381, $bills->imported_rows);
         $this->assertSame(190, $bills->importedDocumentCount());
+        $this->actingAs($this->user)->get(route('purchases.documents', [$company, 'bills']))
+            ->assertOk()->assertSee('190 documents')->assertSee('BILL0001');
         $bill = $company->supplierBills()->where('supplier_reference', 'BILL0001')->firstOrFail();
         app(PurchaseService::class)->post($company, 'bills', $bill, $this->user);
         $bill->refresh();
@@ -724,6 +746,42 @@ class ImportExportFoundationTest extends TestCase
         $this->assertDatabaseHas('journal_lines', ['journal_entry_id' => $bill->journal_entry_id, 'account_id' => $this->account('1150'), 'debit' => '20.0000']);
         $this->assertDatabaseHas('journal_lines', ['journal_entry_id' => $bill->journal_entry_id, 'account_id' => $this->account('2000'), 'credit' => '270.0000']);
         $this->assertDatabaseCount('transaction_tax_lines', 4);
+    }
+
+    public function test_non_posting_workflow_imports_and_imported_invoice_bill_lists_are_visible_and_safe(): void
+    {
+        app(SalesService::class)->createCustomer($this->company, ['code' => 'FLOW-C', 'name' => 'Workflow Customer', 'type' => 'business', 'currency_id' => $this->company->base_currency_id, 'payment_terms_days' => 30, 'credit_limit' => 10000, 'receivable_account_id' => $this->account('1100'), 'is_active' => true], $this->user);
+        app(SupplierMaintenanceService::class)->create($this->company, ['code' => 'FLOW-S', 'name' => 'Workflow Supplier', 'type' => 'business', 'currency_id' => $this->company->base_currency_id, 'payment_terms_days' => 30, 'credit_limit' => 10000, 'payable_account_id' => $this->account('2000'), 'is_active' => true], $this->user);
+        app(SalesService::class)->createItem($this->company, ['code' => 'FLOW-I', 'name' => 'Workflow Item', 'type' => 'product', 'unit' => 'each', 'sales_price' => 100, 'purchase_price' => 60, 'revenue_account_id' => $this->account('4000'), 'expense_account_id' => $this->account('5000'), 'is_active' => true], $this->user);
+        $branch = $this->company->branches()->firstOrFail();
+
+        $quotation = $this->batch('sales_quotations', "Reference,Customer,Date,Expiry,Branch,Item,Account,Description,Quantity,Price,Discount\nQ-SOURCE,FLOW-C,2027-01-10,2027-01-31,{$branch->code},FLOW-I,4000,Quoted item,2,100,10\n", ['Reference' => 'quotation_ref', 'Customer' => 'customer', 'Date' => 'quotation_date', 'Expiry' => 'expiry_date', 'Branch' => 'branch', 'Item' => 'item', 'Account' => 'revenue_account', 'Description' => 'description', 'Quantity' => 'quantity', 'Price' => 'unit_price', 'Discount' => 'discount'], true);
+        $order = $this->batch('sales_orders', "Reference,Customer,Date,Branch,Item,Account,Description,Quantity,Price,Discount\nSO-SOURCE,FLOW-C,2027-01-11,{$branch->code},FLOW-I,4000,Ordered item,2,100,10\n", ['Reference' => 'order_ref', 'Customer' => 'customer', 'Date' => 'order_date', 'Branch' => 'branch', 'Item' => 'item', 'Account' => 'revenue_account', 'Description' => 'description', 'Quantity' => 'quantity', 'Price' => 'unit_price', 'Discount' => 'discount'], true);
+        $purchase = $this->batch('purchase_orders', "Reference,Supplier,Date,Expected,Branch,Item,Account,Description,Quantity,Price,Discount\nPO-SOURCE,FLOW-S,2027-01-12,2027-01-20,{$branch->code},FLOW-I,5000,Purchased item,3,60,0\n", ['Reference' => 'order_ref', 'Supplier' => 'supplier', 'Date' => 'order_date', 'Expected' => 'expected_date', 'Branch' => 'branch', 'Item' => 'item', 'Account' => 'expense_account', 'Description' => 'description', 'Quantity' => 'quantity', 'Price' => 'unit_price', 'Discount' => 'discount'], true);
+
+        $this->assertSame('completed', $quotation->status);
+        $this->assertSame('completed', $order->status);
+        $this->assertSame('completed', $purchase->status);
+        $this->assertSame(0, $this->company->journals()->count());
+        $this->actingAs($this->user)->get(route('sales.transactions.index', [$this->company, 'quotations']))->assertOk()->assertSee('Q-SOURCE')->assertSee('1 documents');
+        $this->get(route('sales.transactions.index', [$this->company, 'orders']))->assertOk()->assertSee('SO-SOURCE')->assertSee('1 documents');
+        $this->get(route('purchases.documents', [$this->company, 'orders']))->assertOk()->assertSee('PO-SOURCE')->assertSee('1 documents');
+
+        $invoice = $this->batch('sales_invoices', "Reference,Customer,Date,Due,Branch,Item,Account,Description,Quantity,Price\nINV-SOURCE,FLOW-C,2027-01-15,2027-02-14,{$branch->code},FLOW-I,4000,Imported invoice,1,100\n", ['Reference' => 'invoice_ref', 'Customer' => 'customer', 'Date' => 'invoice_date', 'Due' => 'due_date', 'Branch' => 'branch', 'Item' => 'item', 'Account' => 'revenue_account', 'Description' => 'description', 'Quantity' => 'quantity', 'Price' => 'unit_price'], true);
+        $bill = $this->batch('supplier_bills', "Reference,Supplier,Date,Due,Branch,Item,Account,Description,Quantity,Price\nBILL-SOURCE,FLOW-S,2027-01-16,2027-02-15,{$branch->code},FLOW-I,5000,Imported bill,1,60\n", ['Reference' => 'bill_ref', 'Supplier' => 'supplier', 'Date' => 'bill_date', 'Due' => 'due_date', 'Branch' => 'branch', 'Item' => 'item', 'Account' => 'expense_account', 'Description' => 'description', 'Quantity' => 'quantity', 'Price' => 'unit_price'], true);
+        $this->get(route('sales.transactions.index', [$this->company, 'invoices']))->assertOk()->assertSee('INV-SOURCE')->assertSee('1 documents');
+        $this->get(route('purchases.documents', [$this->company, 'bills']))->assertOk()->assertSee('BILL-SOURCE')->assertSee('1 documents');
+
+        app(ImportUndoService::class)->undo($this->company, $quotation, $this->user, 'UNDO');
+        app(ImportUndoService::class)->undo($this->company, $order, $this->user, 'UNDO');
+        app(ImportUndoService::class)->undo($this->company, $purchase, $this->user, 'UNDO');
+        $this->assertDatabaseMissing('sales_quotations', ['company_id' => $this->company->id, 'customer_reference' => 'Q-SOURCE']);
+        $this->assertDatabaseMissing('sales_orders', ['company_id' => $this->company->id, 'customer_reference' => 'SO-SOURCE']);
+        $this->assertDatabaseMissing('purchase_orders', ['company_id' => $this->company->id, 'supplier_reference' => 'PO-SOURCE']);
+        $this->assertSame(0, $this->company->journals()->count());
+        $this->assertSame('ready', $this->batch('sales_quotations', "Reference,Customer,Date,Expiry,Branch,Item,Account,Description,Quantity,Price,Discount\nQ-SOURCE,FLOW-C,2027-01-10,2027-01-31,{$branch->code},FLOW-I,4000,Quoted item,2,100,10\n", ['Reference' => 'quotation_ref', 'Customer' => 'customer', 'Date' => 'quotation_date', 'Expiry' => 'expiry_date', 'Branch' => 'branch', 'Item' => 'item', 'Account' => 'revenue_account', 'Description' => 'description', 'Quantity' => 'quantity', 'Price' => 'unit_price', 'Discount' => 'discount'])->status);
+        $this->assertSame(1, $invoice->imported_rows);
+        $this->assertSame(1, $bill->imported_rows);
     }
 
     private function batch(string $type, string $csv, array $mapping, bool $confirm = false, ?int $branchId = null, string $postingMode = 'draft'): ImportBatch

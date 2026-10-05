@@ -1,0 +1,6 @@
+Sales Order Source ID,Customer Code,Order Date,Branch Code,Product / Service Code,Revenue Account,Description,Quantity,Unit Price,Discount Amount
+SO-DEMO-001,CUST001,2025-04-15,AKL,PROD002,4010,Accepted product order,2,62.50,0.00
+SO-DEMO-001,CUST001,2025-04-15,AKL,PROD006,4030,Accepted delivery order,1,80.00,5.00
+SO-DEMO-002,CUST002,2025-05-12,WLG,SERV002,4020,Implementation order,3,110.00,15.00
+SO-DEMO-002,CUST002,2025-05-12,WLG,PROD003,4010,Supporting product order,2,80.00,0.00
+SO-DEMO-003,CUST003,2025-06-08,AKL,SERV008,4020,Advisory order,2,260.00,20.00

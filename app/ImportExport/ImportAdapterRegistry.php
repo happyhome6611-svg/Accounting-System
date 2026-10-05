@@ -7,7 +7,10 @@ use App\ImportExport\Adapters\CustomerImportAdapter;
 use App\ImportExport\Adapters\ManualJournalImportAdapter;
 use App\ImportExport\Adapters\OpeningBalanceImportAdapter;
 use App\ImportExport\Adapters\ProductImportAdapter;
+use App\ImportExport\Adapters\PurchaseOrderImportAdapter;
 use App\ImportExport\Adapters\SalesInvoiceImportAdapter;
+use App\ImportExport\Adapters\SalesOrderImportAdapter;
+use App\ImportExport\Adapters\SalesQuotationImportAdapter;
 use App\ImportExport\Adapters\SupplierBillImportAdapter;
 use App\ImportExport\Adapters\SupplierImportAdapter;
 use App\ImportExport\Contracts\ImportAdapter;
@@ -19,7 +22,10 @@ final class ImportAdapterRegistry
         'customers' => CustomerImportAdapter::class,
         'suppliers' => SupplierImportAdapter::class,
         'products' => ProductImportAdapter::class,
+        'sales_quotations' => SalesQuotationImportAdapter::class,
+        'sales_orders' => SalesOrderImportAdapter::class,
         'sales_invoices' => SalesInvoiceImportAdapter::class,
+        'purchase_orders' => PurchaseOrderImportAdapter::class,
         'supplier_bills' => SupplierBillImportAdapter::class,
         'manual_journals' => ManualJournalImportAdapter::class,
         'opening_balances' => OpeningBalanceImportAdapter::class,
@@ -34,6 +40,6 @@ final class ImportAdapterRegistry
 
     public function types(): array
     {
-        return ['chart_of_accounts' => 'Chart of Accounts', 'customers' => 'Customers', 'suppliers' => 'Suppliers', 'products' => 'Products / Services', 'sales_invoices' => 'Sales Invoices', 'supplier_bills' => 'Supplier Bills', 'manual_journals' => 'Manual Journals', 'opening_balances' => 'Opening Balances (staging only)'];
+        return ['chart_of_accounts' => 'Chart of Accounts', 'customers' => 'Customers', 'suppliers' => 'Suppliers', 'products' => 'Products / Services', 'sales_quotations' => 'Sales Quotations', 'sales_orders' => 'Sales Orders', 'sales_invoices' => 'Sales Invoices', 'purchase_orders' => 'Purchase Orders', 'supplier_bills' => 'Supplier Bills', 'manual_journals' => 'Manual Journals', 'opening_balances' => 'Opening Balances (staging only)'];
     }
 }

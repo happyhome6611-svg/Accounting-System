@@ -1,0 +1,3 @@
+Credit Reference,Supplier Code,Source Bill,Credit Date,Branch Code,Product / Service Code,Expense Account,Description,Net Amount,Tax Code
+SC-DEMO-001,SUP004,BILL0001,2025-05-15,AKL,PROD010,5010,Returned damaged goods,25.00,STANDARD
+SC-DEMO-002,SUP013,BILL0004,2025-06-20,WLG,PROD013,5010,Zero-rated delivery correction,18.00,ZERO

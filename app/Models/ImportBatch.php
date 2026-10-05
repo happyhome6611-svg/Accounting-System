@@ -72,6 +72,8 @@ class ImportBatch extends Model
     public function documentField(): ?string
     {
         return match ($this->data_type) {
+            'sales_quotations' => 'quotation_ref',
+            'sales_orders', 'purchase_orders' => 'order_ref',
             'sales_invoices' => 'invoice_ref',
             'supplier_bills' => 'bill_ref',
             default => null,

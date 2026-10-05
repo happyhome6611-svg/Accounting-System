@@ -1,0 +1,6 @@
+Quotation Source ID,Customer Code,Quotation Date,Expiry Date,Branch Code,Product / Service Code,Revenue Account,Description,Quantity,Unit Price,Discount Amount
+Q-DEMO-001,CUST001,2025-04-10,2025-05-10,AKL,PROD002,4010,Initial product quotation,2,62.50,0.00
+Q-DEMO-001,CUST001,2025-04-10,2025-05-10,AKL,PROD006,4030,Zero-rated delivery option,1,80.00,5.00
+Q-DEMO-002,CUST002,2025-05-05,2025-06-04,WLG,SERV002,4020,Implementation services,3,110.00,15.00
+Q-DEMO-002,CUST002,2025-05-05,2025-06-04,WLG,PROD003,4010,Supporting product,2,80.00,0.00
+Q-DEMO-003,CUST003,2025-06-01,2025-07-01,AKL,SERV008,4020,Zero-rated advisory service,2,260.00,20.00
