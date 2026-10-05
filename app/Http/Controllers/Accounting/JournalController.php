@@ -26,7 +26,23 @@ class JournalController extends Controller
         $company = $r->company_id ? $this->company($r) : $companies->first();
         abort_if($company && $country && $company->country_id !== $country->id, 404);
 
-        return view('accounting.index', ['countries' => $countries, 'country' => $country, 'companies' => $companies, 'company' => $company, 'journals' => $company?->journals()->latest()->get() ?? collect()]);
+        $sorts = [
+            'number' => 'id',
+            'date' => 'transaction_date',
+            'description' => 'description',
+            'status' => 'status',
+        ];
+        $requestedSort = $r->string('sort')->toString();
+        $sort = array_key_exists($requestedSort, $sorts) ? $requestedSort : 'date';
+        $requestedDirection = $r->string('direction')->lower()->toString();
+        $direction = in_array($requestedDirection, ['asc', 'desc'], true)
+            ? $requestedDirection
+            : ($requestedSort === $sort && $requestedSort !== '' ? 'asc' : 'desc');
+        $journals = $company
+            ? $company->journals()->orderBy($sorts[$sort], $direction)->orderBy('id', $direction)->get()
+            : collect();
+
+        return view('accounting.index', compact('countries', 'country', 'companies', 'company', 'journals', 'sort', 'direction'));
     }
 
     public function create(Request $r)
